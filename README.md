@@ -1,6 +1,9 @@
 # cliamp-plugin-hack-the-gibson
 
-https://github.com/user-attachments/assets/e125a944-c6d5-451d-8140-41d3eca8d457
+
+https://github.com/user-attachments/assets/e8818aa9-448f-46e8-b510-f18d3923c872
+
+
 
 A music visualizer plugin for [cliamp](https://github.com/bjarneo/cliamp): a flight through a city of glass towers, like the Gibson in Hackers (1995). Edges and code are drawn with Braille dots, the glass is a background tint behind them. All colors are configurable.
 
