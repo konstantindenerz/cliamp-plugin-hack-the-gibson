@@ -912,7 +912,7 @@ var themes = []struct {
 	{"catppuccin", "Catppuccin", "#cba6f7", "#89b4fa", "#f38ba8", "#f9e2af", "#1e1e2e", "", ""},
 	{"gruvbox", "Gruvbox", "#8ec07c", "#83a598", "#fe8019", "#fabd2f", "#282828", "", ""},
 	{"hackers", "Hackers", "#81e3e8", "#6a66b7", "#a054e2", "#e6fdff", "#00020f", "#50c3bc", "#b75049"},
-	{"codepen", "CodePen", "#58c6a2", "#9375ee", "#ee75d2", "#deee75", "#000000", "", ""},
+	{"kode", "Kode", "#58c6a2", "#9375ee", "#ee75d2", "#deee75", "#000000", "", ""},
 }
 
 func rgb(t testing.TB, hex string) color.RGBA {
@@ -1004,8 +1004,8 @@ func TestThemeKey(t *testing.T) {
 		}
 		return h.tick(music(128, 3, 1), 7, 76, tick)
 	}
-	names := []string{"mechanoonna", "tokyo-night", "catppuccin", "gruvbox", "hackers", "codepen", "terminal"}
-	titles := []string{"Mechanoonna", "Tokyo Night", "Catppuccin", "Gruvbox", "Hackers", "CodePen", "Terminal"}
+	names := []string{"mechanoonna", "tokyo-night", "catppuccin", "gruvbox", "hackers", "kode", "terminal"}
+	titles := []string{"Mechanoonna", "Tokyo Night", "Catppuccin", "Gruvbox", "Hackers", "Kode", "Terminal"}
 	for presses := range len(names) + 2 {
 		want := names[presses%len(names)]
 		h := load(t, nil)

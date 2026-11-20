@@ -31,9 +31,9 @@ Press `Ctrl+T` in cliamp to step to the next theme. The status bar shows its nam
 | `catppuccin` | ![catppuccin](assets/themes/catppuccin.png) |
 | `gruvbox` | ![gruvbox](assets/themes/gruvbox.png) |
 | `hackers` | ![hackers](assets/themes/hackers.png) |
-| `codepen` | ![codepen](assets/themes/codepen.png) |
+| `kode` | ![kode](assets/themes/kode.png) |
 
-`mechanoonna` is the default: the amber and red of the Ghostty theme [Mechanoonna](https://github.com/HANCORE-linux/omarchy-mechanoonna-theme). `catppuccin` is Mocha, `gruvbox` the dark one. `codepen` has the colors of the CSS demo. A seventh theme, `terminal`, takes the cyan, blue, red and yellow of the terminal itself; see below for what that costs.
+`mechanoonna` is the default: the amber and red of the Ghostty theme [Mechanoonna](https://github.com/HANCORE-linux/omarchy-mechanoonna-theme). `catppuccin` is Mocha, `gruvbox` the dark one. `kode` has the colors of the CSS demo. A seventh theme, `terminal`, takes the cyan, blue, red and yellow of the terminal itself; see below for what that costs.
 
 `hackers` follows the Gibson of the film, which was a model, as its makers tell it: blocks of perspex with text on cels, shot by a motion control camera at Pinewood. Its towers have pale cyan text on teal glass, the traces of the ground are blue-violet, the bars that mark a directory are violet, the pulses on the ground are white, and the towers turn red when the virus strikes: that is the drop here. The colors are measured from stills of the film, so they are near, not exact.
 

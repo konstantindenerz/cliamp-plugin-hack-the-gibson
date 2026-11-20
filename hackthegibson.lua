@@ -71,7 +71,7 @@ do
     -- is made for. It may have a color for the glass, else that of the
     -- towers, and one for a drop, else that of the frames. hackers has the
     -- colors of the Gibson in the film: pale cyan text on teal glass, violet
-    -- bars, white pulses, and red when the virus strikes. codepen has those
+    -- bars, white pulses, and red when the virus strikes. kode has those
     -- of the CSS demo, and terminal those of the terminal, by palette index.
     THEMES = {
         mechanoonna = {
@@ -95,13 +95,13 @@ do
             tower = "81e3e8", glass = "50c3bc", floor = "6a66b7", beat = "a054e2", drop = "b75049",
             hot = "e6fdff", back = "00020f",
         },
-        codepen = {
-            title = "CodePen",
+        kode = {
+            title = "Kode",
             tower = "58c6a2", floor = "9375ee", beat = "ee75d2", hot = "deee75", back = "000000",
         },
         terminal = { title = "Terminal", tower = 6, floor = 4, beat = 9, hot = 11, back = "000000" },
     }
-    ORDER = { "mechanoonna", "tokyonight", "catppuccin", "gruvbox", "hackers", "codepen", "terminal" }
+    ORDER = { "mechanoonna", "tokyonight", "catppuccin", "gruvbox", "hackers", "kode", "terminal" }
 
     -- "Tokyo Night", "tokyo-night" and "tokyonight" are one theme, and so is
     -- a longer name that starts with one, as "catppuccin-mocha".
