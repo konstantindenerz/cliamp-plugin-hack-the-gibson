@@ -1,14 +1,14 @@
-// probe tells how well the plugin hears the drums and the tempo of a track.
-// It feeds PCM through the spectrum analysis of cliamp, tick by tick as the
-// player does, into the plugin, and compares the hits that the plugin finds
-// with the ones in the track.
+// probe measures how well the plugin finds the drums and the tempo of a track.
+// It runs PCM through the spectrum analysis of cliamp, tick by tick like the
+// player does, feeds the bands to the plugin and compares the hits the plugin
+// detects with the ones in the track.
 //
 //	go run . ../../hack-the-gibson.lua               # synthetic tracks, with the true hits
 //	go run . -record ../testdata/bands ../../hack-the-gibson.lua
 //	go run . -pcm dir ../../hack-the-gibson.lua      # real music: *.f32, mono, 44.1 kHz
 //	go run . -tap latest ../../hack-the-gibson.lua   # what a plugin got before cliamp#738
 //
-// It is a module of its own, as it needs a checkout of cliamp: see go.mod.
+// It is a separate module because it needs a checkout of cliamp, see go.mod.
 package main
 
 import (
@@ -30,25 +30,25 @@ import (
 
 const (
 	sr   = 44100
-	tick = 0.05 // s between two ticks of cliamp
-	warm = 4.0  // s that the plugin takes to learn the levels of a track
+	tick = 0.05 // seconds per cliamp tick
+	warm = 4.0  // seconds the plugin needs to learn the levels of a track
 )
 
 var (
 	record  = flag.String("record", "", "write the bands of the synthetic tracks to this directory")
 	pcmDir  = flag.String("pcm", "", "run the *.f32 files of this directory instead of the synthetic tracks")
 	tap     = flag.String("tap", "audible", "the tap of cliamp: audible (cliamp#738) or latest (before it)")
-	verbose = flag.Bool("v", false, "show the rise of each band at the hits")
-	trace   = flag.Bool("trace", false, "with -pcm: show the beat and the speed every 10 s of a track")
+	verbose = flag.Bool("v", false, "print the rise of each band at the hits")
+	trace   = flag.Bool("trace", false, "with -pcm: print beat and speed for every 10 s of a track")
 )
 
-// peek lets the probe read the state that the plugin keeps to itself.
+// peek is appended to the plugin source so the probe can read its locals.
 const peek = `
-function __hits() return s.pulsed, s.scanAt, s.struck, s.beat, s.sure, s.speed end
+function __hits() return s.pulse_count, s.scan_at, s.hat_count, s.beat, s.confidence, s.speed end
 `
 
-// host stands in for cliamp: it runs the plugin when the visualizer of
-// cliamp asks for a frame.
+// host is the plugin side of cliamp's visualizer: it runs the plugin when the
+// visualizer asks for a frame.
 type host struct {
 	L      *lua.LState
 	plugin *lua.LTable
@@ -100,15 +100,25 @@ func load(path string) *host {
 		L.Push(lua.LNumber(h.clock))
 		return 1
 	}))
-	player := L.NewTable()
-	player.RawSetString("state", L.NewFunction(func(L *lua.LState) int { L.Push(lua.LString("playing")); return 1 }))
-	cliamp := L.NewTable()
-	cliamp.RawSetString("player", player)
-	L.SetGlobal("cliamp", cliamp)
+	// The plugin only needs the player state. The rest of the API does nothing.
+	noop := L.NewFunction(func(*lua.LState) int { return 0 })
+	table := func(fields map[string]lua.LValue) *lua.LTable {
+		tbl := L.NewTable()
+		for name, v := range fields {
+			tbl.RawSetString(name, v)
+		}
+		return tbl
+	}
+	L.SetGlobal("cliamp", table(map[string]lua.LValue{
+		"player":  table(map[string]lua.LValue{"state": L.NewFunction(func(L *lua.LState) int { L.Push(lua.LString("playing")); return 1 })}),
+		"store":   table(map[string]lua.LValue{"get": noop, "set": noop, "clear": noop}),
+		"log":     table(map[string]lua.LValue{"warn": noop}),
+		"message": noop,
+	}))
 	register := L.NewTable()
 	register.RawSetString("register", L.NewFunction(func(L *lua.LState) int {
-		h.plugin = L.NewTable()
-		h.plugin.RawSetString("config", L.NewFunction(func(L *lua.LState) int { L.Push(lua.LNil); return 1 }))
+		h.plugin = table(map[string]lua.LValue{"config": noop, "command": noop})
+		h.plugin.RawSetString("bind", L.NewFunction(func(L *lua.LState) int { L.Push(lua.LTrue); return 1 }))
 		L.Push(h.plugin)
 		return 1
 	}))
@@ -119,14 +129,14 @@ func load(path string) *host {
 	return h
 }
 
-// result is what the plugin made of a track.
+// result is what the plugin got out of a track.
 type result struct {
-	kicks, snares, hats []float64                          // when it found a hit, in s
-	beat, sure, speed   []float64                          // per tick
-	bands               [][ui.DefaultSpectrumBands]float64 // per tick, as the plugin got them
+	kicks, snares, hats     []float64                          // detection times in s
+	beat, confidence, speed []float64                          // per tick
+	bands                   [][ui.DefaultSpectrumBands]float64 // per tick, as handed to the plugin
 }
 
-// play runs pcm through the analysis of cliamp and the plugin, tick by tick.
+// play runs pcm through the analysis of cliamp and into the plugin, tick by tick.
 func play(path string, pcm []float64) result {
 	h := load(path)
 	v := ui.NewVisualizer(sr)
@@ -140,8 +150,8 @@ func play(path string, pcm []float64) result {
 	for at := tick; at < float64(len(pcm))/sr; at += tick {
 		end := int(at * sr)
 		if *tap == "latest" {
-			// Before cliamp#738 a plugin got the frames that the decoder handed
-			// to the audio device last: the device takes them an eighth of a
+			// Before cliamp#738 a plugin got the samples the decoder had handed
+			// to the audio device last. The device takes them an eighth of a
 			// second at a time, one to two eighths ahead of the sound.
 			end = min(len(pcm), int((math.Floor(at/0.125)+2)*0.125*sr))
 		}
@@ -163,13 +173,13 @@ func play(path string, pcm []float64) result {
 		if s[2] > last[2] {
 			r.hats = append(r.hats, at)
 		}
-		r.beat, r.sure, r.speed = append(r.beat, s[3]), append(r.sure, s[4]), append(r.speed, s[5])
+		r.beat, r.confidence, r.speed = append(r.beat, s[3]), append(r.confidence, s[4]), append(r.speed, s[5])
 		last = s
 	}
 	return r
 }
 
-// track is a mix and the times of its hits.
+// track is a mix plus the times of its hits.
 type track struct {
 	name, file          string
 	bpm                 float64
@@ -182,9 +192,9 @@ type hit struct {
 	gain float64
 }
 
-// build mixes a track of secs seconds from patterns of one bar of 4 beats.
-// sub makes the kick an 808: a kick that is the bass too. muffled takes the
-// top off the mix, as lo-fi does.
+// build mixes a track of secs seconds from one-bar patterns (4 beats). sub
+// turns the kick into an 808 that doubles as the bass, muffled low-passes the
+// mix like lo-fi.
 func build(file, name string, bpm, secs float64, kicks, snares, hats []hit, bass, pad float64, sub, muffled bool) track {
 	rng := rand.New(rand.NewSource(1))
 	n := int(secs * sr)
@@ -207,7 +217,7 @@ func build(file, name string, bpm, secs float64, kicks, snares, hats []hit, bass
 				tail = 0.45
 			}
 			add(at, tail*4, func(sec float64) float64 {
-				// A tone that falls from 158 to 48 Hz, and a click.
+				// A sine that drops from 158 to 48 Hz, plus a click.
 				phase += 2 * math.Pi * (48 + 110*math.Exp(-sec/0.03)) / sr
 				click := 0.0
 				if sec < 0.004 {
@@ -221,7 +231,7 @@ func build(file, name string, bpm, secs float64, kicks, snares, hats []hit, bass
 			t.snares = append(t.snares, at)
 			last := 0.0
 			add(at, 0.35, func(sec float64) float64 {
-				// A body at 190 Hz, and noise without its lows.
+				// A body at 190 Hz plus high-passed noise.
 				white := rng.Float64()*2 - 1
 				high := white - 0.85*last
 				last = white
@@ -233,7 +243,7 @@ func build(file, name string, bpm, secs float64, kicks, snares, hats []hit, bass
 			t.hats = append(t.hats, at)
 			a, b := 0.0, 0.0
 			add(at, 0.12, func(sec float64) float64 {
-				// Noise, twice differenced: only its top is left.
+				// Noise differenced twice, which leaves only the top end.
 				white := rng.Float64()*2 - 1
 				d1 := white - a
 				a = white
@@ -260,7 +270,7 @@ func build(file, name string, bpm, secs float64, kicks, snares, hats []hit, bass
 		}
 	}
 	if muffled {
-		// Two low-pass filters at 4 kHz in a row, and the hiss of a tape.
+		// Tape hiss, then two one-pole low-passes at 4 kHz.
 		k := 1 - math.Exp(-2*math.Pi*4000/sr)
 		a, b := 0.0, 0.0
 		for i := range pcm {
@@ -270,7 +280,7 @@ func build(file, name string, bpm, secs float64, kicks, snares, hats []hit, bass
 		}
 	}
 	for i := range pcm {
-		pcm[i] = math.Tanh(0.8 * pcm[i]) // the limiter of a master
+		pcm[i] = math.Tanh(0.8 * pcm[i]) // stands in for a mastering limiter
 	}
 	return t
 }
@@ -303,12 +313,12 @@ func tracks(secs float64) []track {
 	}
 }
 
-// match counts the true hits that a detection follows, the detections that
-// follow none, and the mean time from hit to detection.
+// match counts the true hits that were detected, the detections that belong
+// to no hit, and the mean delay from hit to detection.
 func match(truth, found []float64) (caught, extra int, late float64) {
 	early, lag := 0.03, 0.16
 	if *tap == "latest" {
-		early, lag = 0.3, 0.1 // that tap is ahead of the sound
+		early, lag = 0.3, 0.1 // this tap runs ahead of the sound
 	}
 	used := make([]bool, len(found))
 	for _, at := range truth {
@@ -330,18 +340,6 @@ func match(truth, found []float64) (caught, extra int, late float64) {
 		late /= float64(caught)
 	}
 	return
-}
-
-// fold gives the beat that the plugin flies to for a true beat period: the
-// plugin takes half or twice a period to stay between 0.35 and 0.71 s.
-func fold(period float64) float64 {
-	for period > math.Sqrt2/2 {
-		period /= 2
-	}
-	for period < math.Sqrt2/4 {
-		period *= 2
-	}
-	return period
 }
 
 func after(xs []float64, sec float64) []float64 {
@@ -370,7 +368,7 @@ func pct(a, b int) float64 {
 }
 
 // onBeat is the share of the second half of a run in which the beat of the
-// plugin is the period, or half or twice it, within 4%.
+// plugin is within 4% of the period, or of half or double of it.
 func onBeat(r result, period float64) float64 {
 	locked, n := 0, 0
 	for _, beat := range r.beat[len(r.beat)/2:] {
@@ -388,8 +386,8 @@ func synthetic(path string) {
 	for _, t := range tracks(60) {
 		r := play(path, t.pcm)
 		half := len(r.beat) / 2
-		fmt.Printf("%-40s %3.0f BPM  beat %.3f s (true %.3f)  sure %.2f  on the beat %3.0f%% of the time  speed %.2f blocks/s\n",
-			t.name, t.bpm, median(r.beat[half:]), 60/t.bpm, mean(r.sure[half:]), onBeat(r, 60/t.bpm), mean(r.speed[half:]))
+		fmt.Printf("%-40s %3.0f BPM  beat %.3f s (true %.3f)  confidence %.2f  on the beat %3.0f%% of the time  speed %.2f blocks/s\n",
+			t.name, t.bpm, median(r.beat[half:]), 60/t.bpm, mean(r.confidence[half:]), onBeat(r, 60/t.bpm), mean(r.speed[half:]))
 		for _, row := range []struct {
 			name         string
 			truth, found []float64
@@ -399,8 +397,8 @@ func synthetic(path string) {
 			fmt.Printf("    %-6s true %4d  caught %4d (%3.0f%%)  extra %4d  late %+4.0f ms\n",
 				row.name, len(truth), caught, pct(caught, len(truth)), extra, late*1000)
 			if *verbose && len(truth) > 0 {
-				// The largest rise of each band from one tick to the next, in
-				// the three ticks after a hit, on average.
+				// Mean over all hits of the largest tick-to-tick rise of each
+				// band in the three ticks after the hit.
 				var rise [ui.DefaultSpectrumBands]float64
 				for _, at := range truth {
 					i := int(at / tick)
@@ -422,8 +420,8 @@ func synthetic(path string) {
 	}
 }
 
-// write records the bands of the synthetic tracks, for the tests of the
-// plugin: they need no cliamp then. A band is 3 hex digits, 000 to fff.
+// write records the bands of the synthetic tracks, so the plugin tests run
+// without cliamp. A band is 3 hex digits, 000 to fff.
 func write(path, dir string) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		panic(err)
@@ -455,7 +453,7 @@ func write(path, dir string) {
 	}
 }
 
-// fft is a radix-2 transform in place; len(x) is a power of two.
+// fft is an in-place radix-2 FFT. len(x) must be a power of two.
 func fft(x []complex128) {
 	n := len(x)
 	for i, j := 1, 0; i < n; i++ {
@@ -481,9 +479,9 @@ func fft(x []complex128) {
 	}
 }
 
-// reference estimates the beat period of pcm in seconds, apart from the
-// plugin: the flux of the whole spectrum every 10 ms, and the lag between
-// 0.33 and 1 s whose multiples line the onsets up best.
+// reference estimates the beat period of pcm in seconds, independently of
+// the plugin: spectral flux every 10 ms, then the lag between 0.33 and 1 s
+// whose multiples line up the onsets best.
 func reference(pcm []float64) float64 {
 	const size, hop = 1024, 441
 	window := make([]float64, size)
@@ -506,7 +504,7 @@ func reference(pcm []float64) float64 {
 		}
 		flux = append(flux, sum)
 	}
-	// Take the slow part out: the mean of the second around each frame.
+	// Remove the slow part: the mean of the second around each frame.
 	flat := make([]float64, len(flux))
 	for i := range flux {
 		lo, hi := max(0, i-50), min(len(flux), i+50)
@@ -533,11 +531,15 @@ func reference(pcm []float64) float64 {
 	return (float64(bestLag) + shift) * hop / sr
 }
 
-// music runs the tracks of a directory of raw PCM (f32le, mono, 44.1 kHz).
-// There the hits have no truth: it shows how many the plugin finds, and how
-// its beat compares with the reference.
+// music runs the raw PCM files of a directory (f32le, mono, 44.1 kHz). There
+// is no ground truth for the hits here, so it prints how many the plugin
+// finds and how its beat compares with the reference.
 func music(path, dir string) {
 	files, _ := filepath.Glob(filepath.Join(dir, "*.f32"))
+	if len(files) == 0 {
+		fmt.Fprintln(os.Stderr, "no *.f32 files in", dir)
+		os.Exit(1)
+	}
 	sort.Strings(files)
 	for _, file := range files {
 		raw, err := os.ReadFile(file)
@@ -552,10 +554,10 @@ func music(path, dir string) {
 		ref := reference(pcm)
 		half := len(r.beat) / 2
 		mins := float64(len(pcm)) / sr / 60
-		fmt.Printf("%-12s reference %.3f s (%3.0f BPM)  plugin %.3f s  sure %.2f  on the beat %3.0f%% of the time | per minute: kick %3.0f snare %3.0f hat %3.0f\n",
-			filepath.Base(file), ref, 60/ref, median(r.beat[half:]), mean(r.sure[half:]), onBeat(r, ref),
+		fmt.Printf("%-12s reference %.3f s (%3.0f BPM)  plugin %.3f s  confidence %.2f  on the beat %3.0f%% of the time | per minute: kick %3.0f snare %3.0f hat %3.0f\n",
+			filepath.Base(file), ref, 60/ref, median(r.beat[half:]), mean(r.confidence[half:]), onBeat(r, ref),
 			float64(len(r.kicks))/mins, float64(len(r.snares))/mins, float64(len(r.hats))/mins)
-		// How hard the track hits: the rise of the bands per second, their
+		// How hard the track hits: rise of the bands per second, their mean
 		// level, and the share of the top three bands in it.
 		rise, level, top := 0.0, 0.0, 0.0
 		for i, bands := range r.bands {
@@ -572,8 +574,8 @@ func music(path, dir string) {
 		secs := float64(len(r.bands)) * tick
 		fmt.Printf("             rises %.2f per s  level %.2f  top bands %.0f%% of it  speed %.2f blocks/s (mean of the second half)\n",
 			rise/secs, level/float64(10*len(r.bands)), 100*top/level*10/3, mean(r.speed[half:]))
-		// The share of the top bands as the plugin tracks it: slow averages
-		// of the top and of all bands, after the first 10 s.
+		// The share of the top bands the way the plugin tracks it: slow
+		// averages of the top and of all bands, after the first 10 s.
 		var shares []float64
 		k := 1 - math.Exp(-0.15*tick)
 		slowTop, slowAll := 0.0, 0.0
@@ -593,13 +595,15 @@ func music(path, dir string) {
 				shares = append(shares, slowTop/slowAll)
 			}
 		}
-		sort.Float64s(shares)
-		fmt.Printf("             top share, slow: least %.3f  median %.3f  most %.3f\n", shares[0], shares[len(shares)/2], shares[len(shares)-1])
+		if len(shares) > 0 { // none for a track under 10 s
+			sort.Float64s(shares)
+			fmt.Printf("             top share, slow: least %.3f  median %.3f  most %.3f\n", shares[0], shares[len(shares)/2], shares[len(shares)-1])
+		}
 		if *trace {
 			for from := 0; from < len(r.beat); from += 200 {
 				to := min(len(r.beat), from+200)
-				fmt.Printf("             %3.0f s  beat %.3f s  sure %.2f  speed %.2f blocks/s\n",
-					float64(from)*tick, median(r.beat[from:to]), mean(r.sure[from:to]), mean(r.speed[from:to]))
+				fmt.Printf("             %3.0f s  beat %.3f s  confidence %.2f  speed %.2f blocks/s\n",
+					float64(from)*tick, median(r.beat[from:to]), mean(r.confidence[from:to]), mean(r.speed[from:to]))
 			}
 		}
 	}
