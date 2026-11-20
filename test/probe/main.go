@@ -3,10 +3,10 @@
 // player does, into the plugin, and compares the hits that the plugin finds
 // with the ones in the track.
 //
-//	go run . ../../hackthegibson.lua               # synthetic tracks, with the true hits
-//	go run . -record ../testdata/bands ../../hackthegibson.lua
-//	go run . -pcm dir ../../hackthegibson.lua      # real music: *.f32, mono, 44.1 kHz
-//	go run . -tap latest ../../hackthegibson.lua   # what a plugin got before cliamp#738
+//	go run . ../../hack-the-gibson.lua               # synthetic tracks, with the true hits
+//	go run . -record ../testdata/bands ../../hack-the-gibson.lua
+//	go run . -pcm dir ../../hack-the-gibson.lua      # real music: *.f32, mono, 44.1 kHz
+//	go run . -tap latest ../../hack-the-gibson.lua   # what a plugin got before cliamp#738
 //
 // It is a module of its own, as it needs a checkout of cliamp: see go.mod.
 package main

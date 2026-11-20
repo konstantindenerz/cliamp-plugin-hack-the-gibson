@@ -42,7 +42,7 @@ local GRID, T1, T4, LIT, BEAT, DROP, HOT = 1, 2, 5, 6, 7, 8, 9
 
 local RESET = "\27[0m"
 
--- conf reads a key of [plugins.hackthegibson] in config.toml.
+-- conf reads a key of [plugins.hack-the-gibson] in config.toml.
 local function conf(key)
     local value = p:config(key)
     return type(value) == "string" and value or nil
@@ -253,7 +253,7 @@ do
         local unknown
         picked, unknown = find(named)
         if not picked and unknown ~= "" then
-            print("hackthegibson: no theme " .. unknown .. ", so it is " .. worn)
+            print("hack-the-gibson: no theme " .. unknown .. ", so it is " .. worn)
         end
     end
     worn = picked or worn
@@ -284,7 +284,7 @@ do
             end
         end)
         if not bound then
-            print("hackthegibson: no key for the themes: " .. tostring(why))
+            print("hack-the-gibson: no key for the themes: " .. tostring(why))
         end
     end
 

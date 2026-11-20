@@ -1,4 +1,4 @@
-// Package test runs hackthegibson.lua in the Lua VM that cliamp uses, with
+// Package test runs hack-the-gibson.lua in the Lua VM that cliamp uses, with
 // stand-ins for the plugin and cliamp tables.
 package test
 
@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -25,14 +26,17 @@ import (
 )
 
 var (
-	update  = flag.Bool("update", false, "rewrite testdata/frames.txt")
+	update  = flag.Bool("update", false, "rewrite the frames in testdata for this architecture")
 	shots   = flag.String("shots", "", "write pictures of some frames to this directory")
 	gallery = flag.String("themes", "", "write a picture of each theme to this directory")
 )
 
 const (
-	source = "../hackthegibson.lua"
-	golden = "testdata/frames.txt"
+	source = "../hack-the-gibson.lua"
+	// The frames differ from one architecture to the next: arm64 does a
+	// multiplication and an addition in one step, and rounds once where
+	// amd64 rounds twice. A dot at the edge of a cell is then in the next.
+	golden = "testdata/frames_" + runtime.GOARCH + ".txt"
 	tick   = 0.05 // s between two ticks of cliamp
 
 	block = 2.9 // BLOCK in the plugin
@@ -419,6 +423,9 @@ func scenes() map[string][]step {
 // A hash may change only on purpose.
 func TestFrames(t *testing.T) {
 	want := map[string]string{}
+	if _, err := os.Stat(golden); err != nil && !*update {
+		t.Skipf("no frames for %s; go test -update records them", runtime.GOARCH)
+	}
 	if file, err := os.Open(golden); err == nil {
 		lines := bufio.NewScanner(file)
 		for lines.Scan() {

@@ -27,7 +27,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y lua-check
-          luacheck hackthegibson.lua
+          luacheck hack-the-gibson.lua
       - name: Test
         working-directory: test
         run: go test ./...

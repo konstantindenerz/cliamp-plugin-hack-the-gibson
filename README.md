@@ -1,4 +1,4 @@
-# cliamp-plugin-hackthegibson
+# cliamp-plugin-hack-the-gibson
 
 A flight through a city of glass towers for [cliamp](https://github.com/bjarneo/cliamp), after the film Hackers (1995). The edges of the towers and the code on them are Braille dots, the glass is a tint of the cells behind them. All colors are yours to set.
 
@@ -9,13 +9,13 @@ The scene follows my CSS demo [Hack The Gibson](https://codepen.io/konstantinden
 ## Install
 
 ```sh
-cliamp plugins install konstantindenerz/cliamp-plugin-hackthegibson
+cliamp plugins install konstantindenerz/cliamp-plugin-hack-the-gibson
 ```
 
 Start cliamp and press `v` until you reach `Hack the Gibson`, or pick it with `Ctrl+V`. Press `V` for full screen. To start with it, set `visualizer = "Hack the Gibson"` in `config.toml`.
 
 ```sh
-cliamp plugins remove hackthegibson
+cliamp plugins remove hack-the-gibson
 ```
 
 ## Themes
@@ -40,7 +40,7 @@ Press `Ctrl+T` in cliamp to step to the next theme. The status bar shows its nam
 You can name the theme in `~/.config/cliamp/config.toml` instead:
 
 ```toml
-[plugins.hackthegibson]
+[plugins.hack-the-gibson]
 theme = "tokyo-night"
 ```
 
@@ -55,7 +55,7 @@ The key needs the `keymap` permission, which `cliamp plugins install` and `cliam
 The plugin needs no configuration. These keys are optional; the values below are the defaults:
 
 ```toml
-[plugins.hackthegibson]
+[plugins.hack-the-gibson]
 theme = "mechanoonna"
 # The key that steps through the themes, or "off" for none.
 theme_key = "ctrl+t"
@@ -70,7 +70,7 @@ pulse = 1
 A theme of your own is five colors, and two more if you like. Each of these keys replaces the color of the theme, so copy the block and change what you like:
 
 ```toml
-[plugins.hackthegibson]
+[plugins.hack-the-gibson]
 tower = "#e7c07c" # the towers and their code
 floor = "#c5564a" # the grid of the ground
 beat = "#d94e38"  # the frames of light of a snare, and a drop
@@ -99,8 +99,8 @@ The glass has a key of its own, `glass`: `"dots"` gives the grid of dots to towe
 ## Development
 
 ```sh
-cp hackthegibson.lua ~/.config/cliamp/plugins/
-cliamp plugins trust hackthegibson
+cp hack-the-gibson.lua ~/.config/cliamp/plugins/
+cliamp plugins trust hack-the-gibson
 ```
 
 cliamp loads plugins at start and asks for the trust step again after each edit. Errors go to `~/.config/cliamp/plugins.log`.
@@ -115,12 +115,12 @@ cd test && go test ./...
 
 ```sh
 cd test/probe
-go run . ../../hackthegibson.lua                            # the report
-go run . -record ../testdata/bands ../../hackthegibson.lua  # record the bands again
-go run . -pcm dir ../../hackthegibson.lua                   # music of your own: *.f32, mono, 44.1 kHz
+go run . ../../hack-the-gibson.lua                            # the report
+go run . -record ../testdata/bands ../../hack-the-gibson.lua  # record the bands again
+go run . -pcm dir ../../hack-the-gibson.lua                   # music of your own: *.f32, mono, 44.1 kHz
 ```
 
-After a change that is meant to alter the picture, `go test -update` records the frames in `test/testdata/frames.txt` again. `go test -run TestShots -shots=/tmp/shots` writes some frames as PNG files, to look at without cliamp. `go test -run TestGallery -themes=../assets/themes` draws the pictures of the themes again.
+After a change that is meant to alter the picture, `go test -update` records the frames again. They are in `test/testdata/frames_arm64.txt` and `frames_amd64.txt`, as the two architectures round their numbers differently; `GOARCH=amd64 go test -update` records the other one on a Mac. `go test -run TestShots -shots=/tmp/shots` writes some frames as PNG files, to look at without cliamp. `go test -run TestGallery -themes=../assets/themes` draws the pictures of the themes again.
 
 ## License
 

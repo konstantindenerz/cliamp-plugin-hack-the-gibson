@@ -1,4 +1,4 @@
-module github.com/konstantindenerz/cliamp-plugin-hackthegibson/test
+module github.com/konstantindenerz/cliamp-plugin-hack-the-gibson/test
 
 go 1.26.11
 
