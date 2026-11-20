@@ -477,7 +477,7 @@ func fold(period float64, calm bool) float64 {
 	return period
 }
 
-// With a steady kick the eye flies one block per beat.
+// With a steady kick the eye flies one block per two beats.
 func TestFollowsTempo(t *testing.T) {
 	for _, bpm := range []float64{96, 120, 128, 150, 174} {
 		t.Run(fmt.Sprint(bpm), func(t *testing.T) {
@@ -491,7 +491,7 @@ func TestFollowsTempo(t *testing.T) {
 				}
 			}
 			state := h.flight()
-			want := 1 / fold(60/bpm, false)
+			want := 0.5 / fold(60/bpm, false)
 			if got := mean / float64(n); state.sure != 1 || math.Abs(got-want) > 0.03*want {
 				t.Fatalf("speed %.4f blocks/s, tempo sure %.2f, beat %.3f s; want %.4f and 1", got, state.sure, state.beat, want)
 			}
@@ -679,8 +679,8 @@ func TestHearsTheDrums(t *testing.T) {
 	}
 }
 
-// Calm music flies calmly: lo-fi at 75 BPM takes a block per beat, not two,
-// and no faster as the minutes go by.
+// Calm music flies calmly: lo-fi at 75 BPM takes a block per two of its
+// beats, not per two of its eighths, and no faster as the minutes go by.
 func TestCalmMusicFliesSlowly(t *testing.T) {
 	r := readBands(t, "lofi")
 	h := load(t, nil)
@@ -692,7 +692,7 @@ func TestCalmMusicFliesSlowly(t *testing.T) {
 		minute[int(float64(i)/ticks)] += h.flight().speed / ticks
 	}
 	t.Logf("blocks/s, minute by minute: %.2f", minute)
-	want := r.bpm / 60
+	want := r.bpm / 60 / 2
 	for i, speed := range minute[1:] {
 		if math.Abs(speed-want) > 0.08*want {
 			t.Errorf("minute %d: %.2f blocks/s, want %.2f", i+2, speed, want)

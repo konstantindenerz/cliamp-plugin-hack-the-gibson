@@ -2,7 +2,7 @@
 
 A flight through a city of glass towers for [cliamp](https://github.com/bjarneo/cliamp), after the film Hackers (1995). The edges of the towers and the code on them are Braille dots, the glass is a tint of the cells behind them. All colors are yours to set.
 
-The eye flies low through the streets of an endless city and turns at the crossings. It flies one block per beat; without a beat it cruises. A kick sends a pulse of light along the ground, a snare runs a frame of light up or down the towers, a hi-hat lights lines of code, and a sudden jump in energy lifts the eye above the roofs for a moment. Each tower belongs to one band of the spectrum: it grows a little and its glass gets denser while that band is loud.
+The eye flies low through the streets of an endless city and turns at the crossings. It flies one block per two beats; without a beat it cruises. A kick sends a pulse of light along the ground, a snare runs a frame of light up or down the towers, a hi-hat lights lines of code, and a sudden jump in energy lifts the eye above the roofs for a moment. Each tower belongs to one band of the spectrum: it grows a little and its glass gets denser while that band is loud.
 
 The scene follows my CSS demo [Hack The Gibson](https://codepen.io/konstantindenerz/pen/poYmNxw).
 

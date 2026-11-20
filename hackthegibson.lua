@@ -481,6 +481,7 @@ local play, rest
 do
     -- Speed in blocks/s, and the speed of the config: a factor on all of it.
     local SPEED = max(0.25, min(2, tonumber((conf("speed") or ""):match("^%s*([%d.]+)") or "") or 1))
+    local BEATS = 2 -- the eye takes this many beats for a block
     local CRUISE = 0.5
     local LOUD_GAIN = 0.4
     local WARP_GAIN = 0.6 -- the share a drop adds
@@ -509,7 +510,7 @@ do
     local RIVALS = 3 -- for this many looks in a row, to take over
     local SURE_STEP = 0.25
     local PHASES = 16
-    local LOCK = 0.3 -- speed change per block of phase error
+    local LOCK = 0.3 -- speed change per beat of phase error
     local LOCK_MAX = 0.15
 
     -- A drop: the short energy average jumps above the long one.
@@ -888,19 +889,21 @@ do
         end
     end
 
-    -- target_speed is one block per beat when the tempo is sure, else the
-    -- cruise. The flight stops when there is nothing to hear.
+    -- target_speed is one block per BEATS beats when the tempo is sure, else
+    -- the cruise. The flight stops when there is nothing to hear.
     local function target_speed()
         if s.quiet >= QUIET then
             return 0
         end
         local target = CRUISE + LOUD_GAIN * s.loud
         if s.beat > 0 then
-            -- Phase error in blocks: 0 when the eye is at a crossing on the beat.
-            local err = s.travel - (s.clock - s.beatAt) / s.beat
+            -- Phase error in beats: 0 when the eye is at a crossing or in the
+            -- middle of a block on the beat. A speed of the config other than
+            -- 1 has no such place to be at.
+            local err = BEATS * s.travel - (s.clock - s.beatAt) / s.beat
             err = err - round(err)
-            local lock = max(-LOCK_MAX, min(LOCK_MAX, -LOCK * err)) * (1 - s.warp)
-            target = target + ((1 + lock) / s.beat - target) * s.sure
+            local lock = SPEED == 1 and max(-LOCK_MAX, min(LOCK_MAX, -LOCK * err)) * (1 - s.warp) or 0
+            target = target + ((1 + lock) / (BEATS * s.beat) - target) * s.sure
         end
         return target * (1 + WARP_GAIN * s.warp) * SPEED
     end
