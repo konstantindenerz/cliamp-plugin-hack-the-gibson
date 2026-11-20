@@ -876,7 +876,8 @@ func TestPauseAndStop(t *testing.T) {
 var glass = regexp.MustCompile(`\x1b\[(4[0-7]|10[0-7]|48;[25];[0-9;]+)m`)
 
 func TestConfig(t *testing.T) {
-	const floor = "\x1b[22;38;2;129;62;54m" // the default
+	const floor = "\x1b[22;38;2;64;62;116m" // hackers, the default
+	const mechanoonna = "\x1b[22;38;2;129;62;54m"
 	for _, tc := range []struct {
 		name   string
 		config map[string]string
@@ -885,9 +886,9 @@ func TestConfig(t *testing.T) {
 	}{
 		{"defaults", nil, floor, "\x1b[48;2;"},
 		{"index", map[string]string{"floor": "8", "tower": "14", "beat": "200", "hot": "1", "glass": "236"}, "\x1b[22;2;90m", "\x1b[48;5;236m"},
-		{"hex", map[string]string{"floor": "#102030"}, "\x1b[22;38;2;21;30;39m", "\x1b[48;2;"},
+		{"hex", map[string]string{"floor": "#102030"}, "\x1b[22;38;2;10;20;35m", "\x1b[48;2;"},
 		{"black ground", map[string]string{"floor": "#102030", "back": "#000000"}, "\x1b[22;38;2;10;19;29m", "\x1b[48;2;"},
-		{"palette towers", map[string]string{"tower": "6"}, floor, ""},
+		{"palette towers", map[string]string{"theme": "mechanoonna", "tower": "6"}, mechanoonna, ""}, // a theme without a glass color
 		{"dotted glass", map[string]string{"glass": "dots"}, floor, ""},
 		{"flat glass", map[string]string{"glass": "8"}, floor, "\x1b[100m"},
 		{"glass color", map[string]string{"tower": "6", "glass": "#58C6A2"}, floor, "\x1b[48;2;"},
@@ -921,11 +922,11 @@ var themes = []struct {
 	tower, floor, beat, hot, back string
 	glass, drop                   string
 }{
+	{"hackers", "Hackers", "#81e3e8", "#6a66b7", "#a054e2", "#e6fdff", "#00020f", "#50c3bc", "#b75049"},
 	{"mechanoonna", "Mechanoonna", "#e7c07c", "#c5564a", "#d94e38", "#fff8e8", "#1c1b19", "", ""},
 	{"tokyo-night", "Tokyo Night", "#7dcfff", "#bb9af7", "#f7768e", "#e0af68", "#1a1b26", "", ""},
 	{"catppuccin", "Catppuccin", "#cba6f7", "#89b4fa", "#f38ba8", "#f9e2af", "#1e1e2e", "", ""},
 	{"gruvbox", "Gruvbox", "#8ec07c", "#83a598", "#fe8019", "#fabd2f", "#282828", "", ""},
-	{"hackers", "Hackers", "#81e3e8", "#6a66b7", "#a054e2", "#e6fdff", "#00020f", "#50c3bc", "#b75049"},
 	{"kode", "Kode", "#58c6a2", "#9375ee", "#ee75d2", "#deee75", "#000000", "", ""},
 }
 
@@ -954,7 +955,12 @@ func frame(t *testing.T, config map[string]string) string {
 func TestThemes(t *testing.T) {
 	for _, th := range themes {
 		t.Run(th.name, func(t *testing.T) {
-			colors := map[string]string{"tower": th.tower, "floor": th.floor, "beat": th.beat, "hot": th.hot, "back": th.back}
+			// Without a glass or drop color of its own, a theme uses tower and
+			// beat. Set them anyway, or the default theme's would apply.
+			colors := map[string]string{
+				"tower": th.tower, "floor": th.floor, "beat": th.beat, "hot": th.hot, "back": th.back,
+				"glass": th.tower, "drop": th.beat,
+			}
 			if th.glass != "" {
 				colors["glass"], colors["drop"] = th.glass, th.drop
 			}
@@ -980,8 +986,8 @@ func TestThemes(t *testing.T) {
 		}
 	}
 	plain := frame(t, nil)
-	if frame(t, map[string]string{"theme": "mechanoonna"}) != plain {
-		t.Error("the default theme should be mechanoonna")
+	if frame(t, map[string]string{"theme": "hackers"}) != plain {
+		t.Error("the default theme should be hackers")
 	}
 	for _, name := range []string{"no such theme", "", "#58c6a2", "tokyo", "7\x1b[2J"} {
 		if frame(t, map[string]string{"theme": name}) != plain {
@@ -989,7 +995,7 @@ func TestThemes(t *testing.T) {
 		}
 	}
 	if tokyo == plain {
-		t.Error("tokyo-night looks like mechanoonna")
+		t.Error("tokyo-night looks like the default theme")
 	}
 
 	// A color in the config overrides the one of the theme.
@@ -1025,8 +1031,8 @@ func TestThemeKey(t *testing.T) {
 		}
 		return nextFrame(h)
 	}
-	names := []string{"mechanoonna", "tokyo-night", "catppuccin", "gruvbox", "hackers", "kode", "terminal"}
-	titles := []string{"Mechanoonna", "Tokyo Night", "Catppuccin", "Gruvbox", "Hackers", "Kode", "Terminal"}
+	names := []string{"hackers", "mechanoonna", "tokyo-night", "catppuccin", "gruvbox", "kode", "terminal"}
+	titles := []string{"Hackers", "Mechanoonna", "Tokyo Night", "Catppuccin", "Gruvbox", "Kode", "Terminal"}
 	for presses := range len(names) + 2 {
 		want := names[presses%len(names)]
 		h := load(t, nil)
@@ -1057,8 +1063,8 @@ func TestThemeKey(t *testing.T) {
 	h = start(t, nil, store, nil)
 	h.press("ctrl+t")
 	h.press("ctrl+t")
-	catppuccin := after(load(t, map[string]string{"theme": "catppuccin"}), 0)
-	if after(start(t, nil, store, nil), 0) != catppuccin {
+	twoOn := after(load(t, map[string]string{"theme": names[2]}), 0)
+	if after(start(t, nil, store, nil), 0) != twoOn {
 		t.Error("the picked theme is gone after a restart")
 	}
 	// A config change after that wins, and a press after that wins again.
@@ -1068,15 +1074,15 @@ func TestThemeKey(t *testing.T) {
 	}
 	h = start(t, gruvbox, store, nil)
 	h.press("ctrl+t")
-	hackers := after(load(t, map[string]string{"theme": "hackers"}), 0)
-	if after(start(t, gruvbox, store, nil), 0) != hackers {
+	kode := after(load(t, map[string]string{"theme": "kode"}), 0) // the one after gruvbox
+	if after(start(t, gruvbox, store, nil), 0) != kode {
 		t.Error("a pick made after a config change is gone after a restart")
 	}
 	// A pick that lost against the config stays gone, also when the config
 	// goes back to the theme it had when the pick was made.
 	store = map[string]lua.LValue{}
 	start(t, gruvbox, store, nil).press("ctrl+t")
-	start(t, map[string]string{"theme": "kode"}, store, nil)
+	start(t, map[string]string{"theme": "catppuccin"}, store, nil)
 	if after(start(t, gruvbox, store, nil), 0) != after(load(t, gruvbox), 0) {
 		t.Error("an old pick came back when the config was set back")
 	}
@@ -1391,7 +1397,7 @@ func TestShots(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := png.Encode(file, picture(out, shot.rows, shot.cols, palette[0])); err != nil {
+				if err := png.Encode(file, picture(out, shot.rows, shot.cols, rgb(t, themes[0].back))); err != nil {
 					t.Fatal(err)
 				}
 				file.Close()

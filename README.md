@@ -36,16 +36,16 @@ Terminal colors have no shades, and the towers need them: far ones fade out and 
 
 | Theme | |
 |---|---|
+| `hackers` | ![hackers](assets/themes/hackers.png) |
 | `mechanoonna` | ![mechanoonna](assets/themes/mechanoonna.png) |
 | `tokyo-night` | ![tokyo-night](assets/themes/tokyo-night.png) |
 | `catppuccin` | ![catppuccin](assets/themes/catppuccin.png) |
 | `gruvbox` | ![gruvbox](assets/themes/gruvbox.png) |
-| `hackers` | ![hackers](assets/themes/hackers.png) |
 | `kode` | ![kode](assets/themes/kode.png) |
 
-`mechanoonna` is the default, with the amber and red of the Ghostty theme [Mechanoonna](https://github.com/HANCORE-linux/omarchy-mechanoonna-theme). `catppuccin` is Mocha, `gruvbox` is the dark variant, `kode` has the colors of the CSS demo. There is a seventh theme, `terminal`, which uses cyan, blue, red and yellow of the terminal palette. See [Configuration](#configuration) for what you lose with that.
+`hackers` is the default. It is modeled on the Gibson from the film, which was a physical model: perspex blocks with text on cels, shot with a motion control camera at Pinewood. Pale cyan text on teal glass, blue-violet traces on the ground, violet bars, white pulses, and the towers turn red when the virus hits (that's the drop here). The colors are sampled from film stills, so they are close but not exact.
 
-`hackers` is modeled on the Gibson from the film, which was a physical model: perspex blocks with text on cels, shot with a motion control camera at Pinewood. Pale cyan text on teal glass, blue-violet traces on the ground, violet bars, white pulses, and the towers turn red when the virus hits (that's the drop here). The colors are sampled from film stills, so they are close but not exact.
+`mechanoonna` has the amber and red of the Ghostty theme [Mechanoonna](https://github.com/HANCORE-linux/omarchy-mechanoonna-theme). `catppuccin` is Mocha, `gruvbox` is the dark variant, `kode` has the colors of the CSS demo. There is a seventh theme, `terminal`, which uses cyan, blue, red and yellow of the terminal palette. See [Configuration](#configuration) for what you lose with that.
 
 You can also set the theme in `~/.config/cliamp/config.toml`:
 
@@ -66,7 +66,7 @@ Nothing is required. These are the optional keys with their defaults:
 
 ```toml
 [plugins.hack-the-gibson]
-theme = "mechanoonna"
+theme = "hackers"
 # Key that switches the theme, "off" for none.
 theme_key = "ctrl+t"
 # Delay the reaction by this much if the city is ahead of the sound.
@@ -77,17 +77,17 @@ speed = 1
 pulse = 1
 ```
 
-To build your own theme, override any of these. Each key replaces that color of the theme:
+To build your own theme, override any of these. Each key replaces that color of the theme; the values here are the ones of `hackers`. A theme without `drop` or `glass` uses `beat` and `tower` for them.
 
 ```toml
 [plugins.hack-the-gibson]
-tower = "#e7c07c" # towers and their code
-floor = "#c5564a" # grid on the ground
-beat = "#d94e38"  # frames of light on a snare
-hot = "#fff8e8"   # heads of the kick pulses
-back = "#1c1b19"  # terminal background
-# drop = "#d94e38" # towers and glass during a drop, defaults to beat
-# glass = "#e7c07c" # the glass, defaults to tower
+tower = "#81e3e8" # towers and their code
+floor = "#6a66b7" # grid on the ground
+beat = "#a054e2"  # frames of light on a snare
+hot = "#e6fdff"   # heads of the kick pulses
+back = "#00020f"  # terminal background
+drop = "#b75049"  # towers and glass during a drop
+glass = "#50c3bc" # the glass
 ```
 
 Set `back` to your terminal background. Far towers fade into it, and the glass is a background color somewhere between it and the tower color. If it doesn't match, the far towers and the thin glass stand out as dark or bright cells. The shades need a terminal with 24-bit color.

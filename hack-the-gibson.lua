@@ -72,6 +72,11 @@ do
     -- "terminal". hackers is sampled from stills of the film; kode is the
     -- palette of the CSS demo.
     THEMES = {
+        hackers = {
+            title = "Hackers",
+            tower = "81e3e8", glass = "50c3bc", floor = "6a66b7", beat = "a054e2", drop = "b75049",
+            hot = "e6fdff", back = "00020f",
+        },
         mechanoonna = {
             title = "Mechanoonna",
             tower = "e7c07c", floor = "c5564a", beat = "d94e38", hot = "fff8e8", back = "1c1b19",
@@ -88,11 +93,6 @@ do
             title = "Gruvbox",
             tower = "8ec07c", floor = "83a598", beat = "fe8019", hot = "fabd2f", back = "282828",
         },
-        hackers = {
-            title = "Hackers",
-            tower = "81e3e8", glass = "50c3bc", floor = "6a66b7", beat = "a054e2", drop = "b75049",
-            hot = "e6fdff", back = "00020f",
-        },
         kode = {
             title = "Kode",
             tower = "58c6a2", floor = "9375ee", beat = "ee75d2", hot = "deee75", back = "000000",
@@ -100,7 +100,7 @@ do
         terminal = { title = "Terminal", tower = 6, floor = 4, beat = 9, hot = 11, back = "000000" },
     }
     -- The order the theme key cycles through.
-    THEME_ORDER = { "mechanoonna", "tokyonight", "catppuccin", "gruvbox", "hackers", "kode", "terminal" }
+    THEME_ORDER = { "hackers", "mechanoonna", "tokyonight", "catppuccin", "gruvbox", "kode", "terminal" }
 
     -- "Tokyo Night", "tokyo-night" and "tokyonight" all match, and so does a
     -- name with a suffix like "catppuccin-mocha". Without a match it returns
@@ -239,7 +239,7 @@ end
 -- The theme key saves its pick in the store, together with the theme the
 -- config named at that time. On the next start the pick wins as long as the
 -- config still names the same theme, so whichever changed last counts.
-local theme, theme_changed = "mechanoonna", false
+local theme, theme_changed = "hackers", false
 
 do
     local cfg_theme = p:config("theme") or ""
