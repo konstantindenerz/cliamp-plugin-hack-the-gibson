@@ -33,6 +33,7 @@ local DX = { [0] = 0, 1, 0, -1 }
 local DZ = { [0] = 1, 0, -1, 0 }
 
 local PULSES = 6
+local WAVES = 3
 
 -- Cell tiers, low to high; a cell shows the highest one drawn into it.
 local GRID, T1, T4, LIT, BEAT, DROP, HOT = 1, 2, 5, 6, 7, 8, 9
@@ -310,6 +311,9 @@ end
 local DELAY = tonumber((conf("delay_ms") or ""):match("^%s*(%d+)") or "") or 0
 DELAY = min(40, floor(DELAY / (TICK * 1000) + 0.5))
 
+-- How much of the pulse of the beat shows: 0 for none, 2 for twice of it.
+local PULSE = max(0, min(2, tonumber((conf("pulse") or ""):match("^%s*([%d.]+)") or "") or 1))
+
 -- State -----------------------------------------------------------------
 
 local s
@@ -396,6 +400,16 @@ local function reset()
         pulsed = 0, -- pulses so far
         scanAt = -huge,
         scanUp = false,
+        -- The pulse of the beat, 0..1: it jumps up on a beat and fades at
+        -- once; snap is the same for a snare. due is when the last beat that
+        -- the tempo foretold was, and waves are the rings that the beats send
+        -- over the ground.
+        thump = 0,
+        snap = 0,
+        due = -huge,
+        phase = 0,
+        waves = {},
+        waved = 0,
         struck = 0, -- hi-hats so far
         strikeAt = -huge,
         strike = 0,
@@ -421,6 +435,9 @@ local function reset()
     }
     for _, o in ipairs(s.onsets) do
         o.mean, o.dev, o.since, o.over = 0.03, 0.02, o.gap, 0
+    end
+    for i = 1, WAVES do
+        s.waves[i] = { x = 0, z = 0, at = -huge, strength = 0 } -- strength 0 = unused
     end
     for i = 1, PULSES do
         s.pulses[i] = { x = 0, z = 0, dx = 0, dz = 0, at = -huge, strength = 0 } -- strength 0 = unused
@@ -525,6 +542,12 @@ do
     local WARP_LIFE = 2.5
     local HOVER = 2.2 -- s above the roofs
 
+    -- The pulse: a beat that the tempo foretells comes LEAD seconds early and
+    -- is this strong when the tempo is sure; two rings are WAVE_GAP s apart.
+    local LEAD = 0.05
+    local BEAT_THUMP = 0.7
+    local WAVE_GAP = 0.15
+
     -- A hit as strong as the recent ones gets this strength.
     local HIT_TYPICAL = 0.6
     -- Snare: rock the eye, alternating sides.
@@ -547,6 +570,7 @@ do
     local K_GLOW_UP, K_GLOW_DOWN = per_tick(12), per_tick(6)
     local K_ROCK, K_LIFT = per_tick(14), per_tick(2.5)
     local K_FAST, K_SLOW = per_tick(4.0), per_tick(0.15)
+    local K_THUMP, K_SNAP = per_tick(8), per_tick(11)
 
     -- levels tracks each band against its own recent range and returns the
     -- overall loudness, 0..1.
@@ -788,8 +812,39 @@ do
         s.beatAt = s.clock - ago * TICK
     end
 
+    -- thud is a beat: the pulse jumps up, and a ring starts under the eye.
+    local function thud(strength)
+        s.thump = max(s.thump, strength)
+        local last = s.waves[(s.waved - 1) % WAVES + 1]
+        if s.clock - last.at > WAVE_GAP then
+            local wave = s.waves[s.waved % WAVES + 1]
+            local x, _, z = camera()
+            wave.x, wave.z, wave.at, wave.strength = x, z, s.clock, strength
+            s.waved = s.waved + 1
+        end
+    end
+
+    -- foretell sets the pulse off on the beats of the tempo, a little before
+    -- each, as the bands lag the sound: so the pulse beats also where a kick
+    -- was not found, and on time.
+    local function foretell()
+        if s.beat <= 0 or s.sure < 0.5 then
+            return
+        end
+        local beats = (s.clock + LEAD - s.beatAt) / s.beat
+        local phase = beats - floor(beats)
+        -- The phase starts over on a beat. It may also do so when the tempo
+        -- was read anew, so two beats cannot be nearer than most of a beat.
+        if phase < s.phase and s.clock - s.due > 0.6 * s.beat then
+            s.due = s.clock
+            thud(BEAT_THUMP * s.sure)
+        end
+        s.phase = phase
+    end
+
     local function kick(strength)
         pulse(strength)
+        thud(strength)
         s.lastKick = s.clock
     end
 
@@ -835,6 +890,7 @@ do
                         -- A frame of light runs up the towers, then down them.
                         s.rockTo, s.rockSide = s.rockSide * ROCK, -s.rockSide
                         s.scanAt, s.scanUp = s.clock, not s.scanUp
+                        s.snap = max(s.snap, strength)
                         -- The highs of a snare rise a tick before its mids
                         -- at times: that was no hi-hat.
                         if s.clock - s.strikeAt < (HAT_WAIT + 0.5) * TICK then
@@ -965,7 +1021,9 @@ do
             s.hasPrev, s.deaf, s.playing = false, DEAF, true
         end
         s.deaf = max(0, s.deaf - TICK)
+        s.thump, s.snap = s.thump - s.thump * K_THUMP, s.snap - s.snap * K_SNAP
         hits(bands)
+        foretell()
         s.rock = s.rock + (s.rockTo - s.rock) * K_ROCK
         s.paced = s.paced + 1
         if s.paced >= PACE_EVERY then
@@ -1005,6 +1063,7 @@ do
     -- rest is one tick of a pause: the eye eases to a stop.
     function rest()
         s.playing = false
+        s.thump, s.snap = s.thump - s.thump * K_THUMP, s.snap - s.snap * K_SNAP
         s.speed = s.speed - s.speed * K_FALL
         if s.speed < 0.01 then
             s.speed = 0
@@ -1051,6 +1110,16 @@ do
     local LINE_GAP = 4
     local FLASH = 0.12 -- s a hi-hat lights its lines
 
+    -- The pulse of the beat: the picture is this much nearer, the towers
+    -- this much taller, the glass this much denser, and the edges this many
+    -- shades brighter. A ring on the ground grows at WAVE_SPEED for WAVE_LIFE
+    -- seconds; it is drawn with WAVE_SIDES sides.
+    local ZOOM = 0.06
+    local JUMP = 0.1
+    local GLASS_PUMP = 0.9
+    local EDGE_PUMP = 1.2
+    local WAVE_SPEED, WAVE_LIFE, WAVE_SIDES = 13, 0.7, 48
+
     local STEP = BLOCK / 4 -- between two lines of the ground
     local SCAN_TIME = 0.45
     local SCAN_TOP = 1.7 * TALL -- the frame of light rises this high
@@ -1096,6 +1165,7 @@ do
     local m11, m12, m13, m21, m22, m23, m31, m32, m33 -- world to view
     local aheadX, aheadZ, spread, sight
     local clock, warp, glow
+    local thump, snap -- the pulse of the beat and of the snare, times PULSE
     local scan -- the height of the frame of light, or nil
 
     -- The corners of a tower in view space, at the ground and at the roof,
@@ -1236,7 +1306,7 @@ do
         local turns = clock / (2 + 3 * hash(id, 4)) + hash(id, 5)
         local cycle = floor(turns)
         local shown = floor(tall / LINE * (REVEAL + (1 - REVEAL) * (turns - cycle))) - 1
-        local flash = clock - s.strikeAt < FLASH and 0.15 + 0.5 * s.strike or 0
+        local flash = clock - s.strikeAt < FLASH and 0.3 + 0.6 * s.strike or 0
         local slot = 10 + s.struck % 7
         for k = 0, shown - 1, every do
             local key = id + k * 7.31 + cycle * 3.17
@@ -1278,6 +1348,7 @@ do
         local near = dist < CODE_SIGHT[coarse] * BLOCK
         local dim = max(T1, T1 + min(3, floor(fog * 4)) - 1)
         local lit = scan and scan < tall and dist < SCAN_SIGHT * BLOCK and scan / tall
+        local crown = snap > 0.3 and dist < SCAN_SIGHT * BLOCK
         local above = ey > tall
         local a = 4
         for b = 1, 4 do
@@ -1308,7 +1379,8 @@ do
                 end
             end
             if faces or above then
-                seg(rx[a], ry[a], rz[a], rx[b], ry[b], rz[b], tier)
+                -- A snare lights the edges of the roofs.
+                seg(rx[a], ry[a], rz[a], rx[b], ry[b], rz[b], crown and BEAT or tier)
             end
             if lit and faces then
                 seg(gx[a] + (rx[a] - gx[a]) * lit, gy[a] + (ry[a] - gy[a]) * lit, gz[a] + (rz[a] - gz[a]) * lit,
@@ -1353,14 +1425,16 @@ do
         if dist >= sight or hash(id, 12) < EMPTY then
             return
         end
+        -- A tower grows with its band, and all of them jump on a beat, when
+        -- their edges are brighter too.
         local level = glow[1 + floor(hash(id, 13) * BANDS)]
-        local tall = TALL * (0.7 + 0.9 * hash(id, 14)) * (1 + BREATH * level)
+        local tall = TALL * (0.7 + 0.9 * hash(id, 14)) * (1 + BREATH * level + JUMP * thump)
         local fog = 1 - dist / sight
-        local tier = T1 + min(3, floor(fog * 4))
+        local tier = T1 + min(3, floor(fog * 4 + EDGE_PUMP * thump))
         if fog > 0.5 then
             if warp > 0.5 then
                 tier = DROP
-            elseif level > 0.8 then
+            elseif level > 0.8 or thump > 0.6 then
                 tier = LIT
             end
         end
@@ -1401,6 +1475,27 @@ do
             local far = k % 2 == 0 and reach or 0.5 * reach
             if abs(z) < far then
                 line(-far, y, z, far, y, z, GRID)
+            end
+        end
+
+        -- The rings of the beats: each grows from where the eye was on the
+        -- beat, hot at first and fainter as it grows.
+        y = y + 0.01
+        for _, wave in ipairs(s.waves) do
+            local age = clock - wave.at
+            if wave.strength * PULSE > 0 and age >= 0 and age <= WAVE_LIFE then
+                local r = WAVE_SPEED * age
+                local tier = age < WAVE_LIFE / 3 and HOT or age < 2 * WAVE_LIFE / 3 and LIT or T4
+                local cx, cz = wave.x - ex, wave.z - ez
+                local x0, z0 = cx + r, cz
+                for i = 1, WAVE_SIDES do
+                    local turn = 2 * pi * i / WAVE_SIDES
+                    local x1, z1 = cx + r * cos(turn), cz + r * sin(turn)
+                    if abs(x0) < reach and abs(z0) < reach then
+                        line(x0, y, z0, x1, y, z1, tier)
+                    end
+                    x0, z0 = x1, z1
+                end
             end
         end
     end
@@ -1446,7 +1541,9 @@ do
         m31, m32, m33 = cp * sy, -sp, cp * cy
         aheadX, aheadZ = sy, cy
         halfW, halfH = w / 2, h / 2
-        focal = max(WIDE * halfW, min(LENS * halfW, TELE * halfH))
+        -- The picture comes nearer on a beat.
+        thump, snap = min(1.5, s.thump * PULSE), min(1.5, s.snap * PULSE)
+        focal = max(WIDE * halfW, min(LENS * halfW, TELE * halfH)) * (1 + ZOOM * thump)
         spread = 1.3 * halfW / focal + 0.3
         -- A low panel has no room for the towers far away.
         sight = min(SIGHT[coarse], 2 + rows / 7) * BLOCK
@@ -1465,13 +1562,14 @@ do
     -- joined in pieces.
     local function text()
         local ramp = warp > 0.5 and WARM or GLOW
+        local pump = GAIN * (1 + GLASS_PUMP * thump) -- the glass is denser on a beat
         local n, c, d, pieces = 0, 0, 0, 0
         for row = 1, rows do
             local tier, lit, sum = 0, 0, 0
             for col = 1, cols do
                 c, d = c + 1, d + 1
                 sum = sum + haze[d]
-                local level = floor(min(1, sum * GAIN) * GLOWS + 0.5)
+                local level = floor(min(1, sum * pump) * GLOWS + 0.5)
                 local t, mask = tiers[c], bits[c]
                 if dotted then
                     if level > 0 and mask == 0 then

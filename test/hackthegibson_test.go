@@ -44,6 +44,7 @@ const peek = `
 function __peek() return s.lastKick, s.beat, s.sure, s.speed, s.travel, s.dir end
 function __eye() return camera() end
 function __hits() return s.pulsed, s.scanAt, s.struck end
+function __thump() return s.thump end
 `
 
 // host stands in for cliamp: a sandboxed VM with the plugin loaded.
@@ -679,6 +680,57 @@ func TestHearsTheDrums(t *testing.T) {
 	}
 }
 
+// The pulse of the beat is high around the kicks of a track and low between
+// them, also where the plugin did not find the kick; the pulse key of the
+// config scales what shows of it.
+func TestPulseOfTheBeat(t *testing.T) {
+	for _, name := range []string{"house", "rock", "lofi"} {
+		t.Run(name, func(t *testing.T) {
+			r := readBands(t, name)
+			h := load(t, nil)
+			var pulse []float64
+			for _, bands := range r.bands {
+				h.tick(bands, 3, 20, tick)
+				pulse = append(pulse, h.numbers("__thump", 1)[0])
+			}
+			// The beats of the track, kick or not, from its first kick on.
+			beat := 60 / r.bpm
+			on, off, beats := 0.0, 0.0, 0
+			for at := r.kicks[0]; at < float64(len(pulse))*tick-beat; at += beat {
+				if at < 8 {
+					continue // the tempo is not sure yet
+				}
+				// The most of the pulse in the 150 ms from the beat, and the
+				// pulse half a beat later.
+				most := 0.0
+				for i := int(at / tick); i <= int((at+0.15)/tick); i++ {
+					most = max(most, pulse[i])
+				}
+				on, off, beats = on+most, off+pulse[int((at+beat/2+0.1)/tick)], beats+1
+			}
+			on, off = on/float64(beats), off/float64(beats)
+			t.Logf("pulse %.2f on the beat, %.2f between two beats", on, off)
+			if on < 0.5 || off > 0.5*on {
+				t.Errorf("pulse %.2f on the beat and %.2f between two beats", on, off)
+			}
+		})
+	}
+
+	// Without the pulse the towers do not jump: the frame on a beat is the
+	// one that a plugin without a pulse draws, but for the rings and lights.
+	r := readBands(t, "house")
+	loud, mute := load(t, nil), load(t, map[string]string{"pulse": "0"})
+	differs := 0
+	for _, bands := range r.bands {
+		if loud.tick(bands, 26, 100, tick) != mute.tick(bands, 26, 100, tick) {
+			differs++
+		}
+	}
+	if differs < len(r.bands)/3 {
+		t.Errorf("the pulse changes %d of %d frames", differs, len(r.bands))
+	}
+}
+
 // Calm music flies calmly: lo-fi at 75 BPM takes a block per two of its
 // beats, not per two of its eighths, and no faster as the minutes go by.
 func TestCalmMusicFliesSlowly(t *testing.T) {
@@ -1289,6 +1341,8 @@ func TestShots(t *testing.T) {
 		at         []float64 // seconds into the scene
 	}{
 		{"music", 140, 40, []float64{2, 4.2, 6, 8.75, 11.1, 14}},
+		// The kicks of the scene are 0.469 s apart: one right after a kick, one between two.
+		{"music", 100, 26, []float64{12.2, 12.45}},
 		{"music", 76, 7, []float64{4.2, 8.75, 11.1}},
 		{"drop", 140, 40, []float64{6.4, 7, 8, 9.5}},
 	} {
