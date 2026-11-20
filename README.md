@@ -20,12 +20,9 @@ cliamp plugins remove hackthegibson
 
 ## Themes
 
-The colors of a terminal have no shades, and the towers need them: the far ones fade, and their glass is a tint. So the plugin comes with themes. Pick one in `~/.config/cliamp/config.toml`:
+The colors of a terminal have no shades, and the towers need them: the far ones fade, and their glass is a tint. So the plugin comes with themes.
 
-```toml
-[plugins.hackthegibson]
-theme = "tokyo-night"
-```
+Press `Ctrl+T` in cliamp to step to the next theme. The status bar shows its name, and the plugin keeps it for the next start. The key is in the list of `Ctrl+K` too.
 
 | Theme | |
 |---|---|
@@ -34,10 +31,24 @@ theme = "tokyo-night"
 | `catppuccin` | ![catppuccin](assets/themes/catppuccin.png) |
 | `gruvbox` | ![gruvbox](assets/themes/gruvbox.png) |
 | `hackers` | ![hackers](assets/themes/hackers.png) |
+| `codepen` | ![codepen](assets/themes/codepen.png) |
 
-`mechanoonna` is the default: the amber and red of the Ghostty theme [Mechanoonna](https://github.com/HANCORE-linux/omarchy-mechanoonna-theme). `catppuccin` is Mocha, `gruvbox` the dark one. `hackers` has the colors of the film, as in the CSS demo. A sixth theme, `terminal`, takes the cyan, blue, red and yellow of the terminal itself; see below for what that costs.
+`mechanoonna` is the default: the amber and red of the Ghostty theme [Mechanoonna](https://github.com/HANCORE-linux/omarchy-mechanoonna-theme). `catppuccin` is Mocha, `gruvbox` the dark one. `codepen` has the colors of the CSS demo. A seventh theme, `terminal`, takes the cyan, blue, red and yellow of the terminal itself; see below for what that costs.
 
-The name may be written as you like: `Tokyo Night`, `tokyo_night` and `tokyonight` are the same theme, and so are `catppuccin-mocha` and `gruvbox-dark`. A name that the plugin does not know gives the default theme and a line in `~/.config/cliamp/plugins.log`.
+`hackers` follows the Gibson of the film, which was a model, as its makers tell it: blocks of perspex with text on cels, shot by a motion control camera at Pinewood. Its towers have pale cyan text on teal glass, the traces of the ground are blue-violet, the bars that mark a directory are violet, the pulses on the ground are white, and the towers turn red when the virus strikes: that is the drop here. The colors are measured from stills of the film, so they are near, not exact.
+
+You can name the theme in `~/.config/cliamp/config.toml` instead:
+
+```toml
+[plugins.hackthegibson]
+theme = "tokyo-night"
+```
+
+The name may be written as you like: `Tokyo Night`, `tokyo_night` and `tokyonight` are the same theme, and so are `catppuccin-mocha` and `gruvbox-dark`. A name that the plugin does not know gives the default theme and a line in `~/.config/cliamp/plugins.log`. Of the key and the config, the last act counts: a step of the key goes before the theme of the config, until you change that.
+
+From a shell, `cliamp plugins call "Hack the Gibson" theme tokyo-night` puts a theme on in the running player, and without a name it lists the themes.
+
+The key needs the `keymap` permission, which `cliamp plugins install` and `cliamp plugins trust` show. It is the only permission of the plugin.
 
 ## Configuration
 
@@ -46,11 +57,13 @@ The plugin needs no configuration. These keys are optional; the values below are
 ```toml
 [plugins.hackthegibson]
 theme = "mechanoonna"
+# The key that steps through the themes, or "off" for none.
+theme_key = "ctrl+t"
 # Wait this long before the city reacts, when it is ahead of the sound.
 delay_ms = 0
 ```
 
-A theme of your own is five colors. Each of these keys replaces the color of the theme, so copy the block and change what you like:
+A theme of your own is five colors, and two more if you like. Each of these keys replaces the color of the theme, so copy the block and change what you like:
 
 ```toml
 [plugins.hackthegibson]
@@ -59,6 +72,8 @@ floor = "#c5564a" # the grid of the ground
 beat = "#d94e38"  # the frames of light of a snare, and a drop
 hot = "#fff8e8"   # the heads of the pulses of a kick
 back = "#1c1b19"  # the background of the terminal
+# drop = "#d94e38" # the towers and their glass in a drop; else as beat
+# glass = "#e7c07c" # the glass; else as tower
 ```
 
 Set `back` to the background of your terminal: the towers far away fade into it, and the glass is a background color between it and the color of the towers. With another `back` the far towers and the thin glass stand out as dark or bright cells. The shades need a terminal with 24-bit color.

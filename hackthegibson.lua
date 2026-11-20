@@ -7,6 +7,7 @@ local p = plugin.register({
     type = "visualizer",
     version = "0.1.0",
     description = "Flight through a city of glass towers",
+    permissions = { "keymap" }, -- for the key that steps through the themes
 })
 
 local abs, floor, ceil, max, min = math.abs, math.floor, math.ceil, math.max, math.min
@@ -34,7 +35,7 @@ local DZ = { [0] = 1, 0, -1, 0 }
 local PULSES = 6
 
 -- Cell tiers, low to high; a cell shows the highest one drawn into it.
-local GRID, T1, T4, LIT, BEAT, HOT = 1, 2, 5, 6, 7, 8
+local GRID, T1, T4, LIT, BEAT, DROP, HOT = 1, 2, 5, 6, 7, 8, 9
 
 -- Colors ----------------------------------------------------------------
 
@@ -54,75 +55,70 @@ local COLOR, GLOW, WARM = {}, {}, {}
 local glowing, dotted = false, false
 local GLOWS, GAIN = 16, 1
 
+-- The themes by name, in the order that the key steps through them; find
+-- gives the name of the theme that the config means, and dress puts a theme
+-- on: it sets the colors above.
+local THEMES, ORDER, find, dress
+
 do
     -- The shades of an RGB color from far to near, and the densest glass.
     local SHADES = { 0.22, 0.42, 0.68, 1 }
     local GLASS = 0.5
 
-    -- The themes: the colors of the towers, the ground, the frames of light
-    -- and the heads of the pulses, and the background of the terminal that
-    -- they are made for. hackers has the colors of the film, as in the CSS
-    -- demo; terminal has those of the terminal itself, by palette index.
-    local THEMES = {
-        mechanoonna = { tower = "e7c07c", floor = "c5564a", beat = "d94e38", hot = "fff8e8", back = "1c1b19" },
-        tokyonight = { tower = "7dcfff", floor = "bb9af7", beat = "f7768e", hot = "e0af68", back = "1a1b26" },
-        catppuccin = { tower = "cba6f7", floor = "89b4fa", beat = "f38ba8", hot = "f9e2af", back = "1e1e2e" },
-        gruvbox = { tower = "8ec07c", floor = "83a598", beat = "fe8019", hot = "fabd2f", back = "282828" },
-        hackers = { tower = "58c6a2", floor = "9375ee", beat = "ee75d2", hot = "deee75", back = "000000" },
-        terminal = { tower = 6, floor = 4, beat = 9, hot = 11, back = "000000" },
+    -- A theme has the colors of the towers, the ground, the frames of light
+    -- and the heads of the pulses, and the background of the terminal that it
+    -- is made for. It may have a color for the glass, else that of the
+    -- towers, and one for a drop, else that of the frames. hackers has the
+    -- colors of the Gibson in the film: pale cyan text on teal glass, violet
+    -- bars, white pulses, and red when the virus strikes. codepen has those
+    -- of the CSS demo, and terminal those of the terminal, by palette index.
+    THEMES = {
+        mechanoonna = {
+            title = "Mechanoonna",
+            tower = "e7c07c", floor = "c5564a", beat = "d94e38", hot = "fff8e8", back = "1c1b19",
+        },
+        tokyonight = {
+            title = "Tokyo Night",
+            tower = "7dcfff", floor = "bb9af7", beat = "f7768e", hot = "e0af68", back = "1a1b26",
+        },
+        catppuccin = {
+            title = "Catppuccin",
+            tower = "cba6f7", floor = "89b4fa", beat = "f38ba8", hot = "f9e2af", back = "1e1e2e",
+        },
+        gruvbox = {
+            title = "Gruvbox",
+            tower = "8ec07c", floor = "83a598", beat = "fe8019", hot = "fabd2f", back = "282828",
+        },
+        hackers = {
+            title = "Hackers",
+            tower = "81e3e8", glass = "50c3bc", floor = "6a66b7", beat = "a054e2", drop = "b75049",
+            hot = "e6fdff", back = "00020f",
+        },
+        codepen = {
+            title = "CodePen",
+            tower = "58c6a2", floor = "9375ee", beat = "ee75d2", hot = "deee75", back = "000000",
+        },
+        terminal = { title = "Terminal", tower = 6, floor = 4, beat = 9, hot = 11, back = "000000" },
     }
-    local DEFAULT = "mechanoonna"
+    ORDER = { "mechanoonna", "tokyonight", "catppuccin", "gruvbox", "hackers", "codepen", "terminal" }
 
-    -- The name of a theme, as the config has it: "Tokyo Night", "tokyo-night"
-    -- and "tokyonight" are one theme, and so is a longer name that starts
-    -- with one, as "catppuccin-mocha".
-    local theme = THEMES[DEFAULT]
-    do
-        local name = (conf("theme") or ""):match("^[%s\"']*([%w _%-]*)"):lower():gsub("[^%w]", "")
-        local found = THEMES[name]
-        for known, colors in pairs(THEMES) do
-            if not found and #known < #name and name:sub(1, #known) == known then
-                found = colors
+    -- "Tokyo Night", "tokyo-night" and "tokyonight" are one theme, and so is
+    -- a longer name that starts with one, as "catppuccin-mocha".
+    function find(name)
+        name = (name or ""):match("^[%s\"']*([%w _%-]*)"):lower():gsub("[^%w]", "")
+        if THEMES[name] then
+            return name
+        end
+        for _, known in ipairs(ORDER) do
+            if #known < #name and name:sub(1, #known) == known then
+                return known
             end
         end
-        if found then
-            theme = found
-        elseif name ~= "" then
-            print("hackthegibson: no theme " .. name .. ", so it is " .. DEFAULT)
-        end
+        return nil, name
     end
 
     local function parts(hex)
         return { tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16) }
-    end
-
-    -- A color is "#rrggbb" or a palette index (0-255). The first has shades,
-    -- the second follows the theme of the terminal. A key of the config that
-    -- names no color has the color of the theme.
-    local function ink(key)
-        local value = conf(key)
-        local hex = value and value:match("^%s*#(%x%x%x%x%x%x)")
-        local index = not hex and tonumber(value and value:match("^%s*(%d+)") or "")
-        if not hex and not index then
-            local color = theme[key]
-            if type(color) == "number" then
-                index = color
-            else
-                hex = color
-            end
-        end
-        if index then
-            return { index = min(index, 255) }
-        end
-        return hex and parts(hex)
-    end
-
-    -- The ground of the terminal. A shade of a color is that far from here
-    -- to the color, so the towers far away fade into the ground. A palette
-    -- index will not do here.
-    local back = ink("back")
-    if back.index then
-        back = parts(theme.back)
     end
 
     -- indexed gives the code of a palette color, for the dots or the ground
@@ -136,69 +132,176 @@ do
         return (ground and "48;5;" or "38;5;") .. n
     end
 
-    local function rgb(color, shade, white, ground)
-        local part = {}
-        for i = 1, 3 do
-            local v = back[i] + (color[i] - back[i]) * shade
-            part[i] = floor(v + (255 - v) * white + 0.5)
-        end
-        return string.format("%d;2;%d;%d;%d", ground and 48 or 38, part[1], part[2], part[3])
-    end
+    function dress(name)
+        local theme = THEMES[name]
 
-    -- paint gives the code for the dots: step 1 to 4 from far to near, 5 lit.
-    -- A palette color is faint far away and bright near; every code sets the
-    -- weight too, as the one before may have changed it.
-    local function paint(color, step)
-        local n = color.index
-        if not n then
-            return "\27[22;" .. rgb(color, SHADES[min(step, 4)], step == 5 and 0.55 or 0) .. "m"
+        -- A color is "#rrggbb" or a palette index (0-255). The first has
+        -- shades, the second follows the theme of the terminal. A key of the
+        -- config that names no color has the color of the theme.
+        local function ink(key)
+            local value = conf(key)
+            local hex = value and value:match("^%s*#(%x%x%x%x%x%x)")
+            local index = not hex and tonumber(value and value:match("^%s*(%d+)") or "")
+            if not hex and not index then
+                local color = theme[key]
+                if type(color) == "number" then
+                    index = color
+                else
+                    hex = color
+                end
+            end
+            if index then
+                return { index = min(index, 255) }
+            end
+            return hex and parts(hex)
         end
-        local weight = "22;"
-        if step <= 2 then
-            weight = "22;2;"
-        elseif step == 5 then
-            weight = "22;1;"
-        end
-        if step >= 4 and n < 8 then
-            n = n + 8
-        end
-        return "\27[" .. weight .. indexed(n) .. "m"
-    end
 
-    local tower, floor_, beat = ink("tower"), ink("floor"), ink("beat")
-    COLOR[GRID] = floor_.index and paint(floor_, 1) or "\27[22;" .. rgb(floor_, 0.6, 0) .. "m"
-    for step = 1, 4 do
-        COLOR[T1 + step - 1] = paint(tower, step)
-    end
-    COLOR[LIT] = paint(tower, 5)
-    COLOR[BEAT] = paint(beat, 4)
-    COLOR[HOT] = paint(ink("hot"), 4)
-
-    -- The glass has the color of the towers, unless the config names one.
-    -- An RGB color gives shades of it. A palette color has none: as the glass
-    -- it is one flat shade where the glass is dense enough, and towers of a
-    -- palette color get dotted glass.
-    local wanted = conf("glass") or ""
-    if not wanted:match("^%s*off") then
-        glowing = true
-        local glass = ink("glass")
-        if not glass and not tower.index and not wanted:match("^%s*dots") then
-            glass = tower
+        -- The ground of the terminal. A shade of a color is that far from
+        -- here to the color, so the towers far away fade into the ground. A
+        -- palette index will not do here.
+        local back = ink("back")
+        if back.index then
+            back = parts(theme.back)
         end
-        if not glass then
-            dotted = true
-            GLOWS, GAIN = 4, 1.3
-        elseif glass.index then
-            GLOWS, GAIN = 1, 2
-            GLOW[1] = "\27[" .. indexed(glass.index, true) .. "m"
-            WARM = GLOW
-        else
-            for level = 1, GLOWS do
-                GLOW[level] = "\27[" .. rgb(glass, GLASS * level / GLOWS, 0, true) .. "m"
-                WARM[level] = beat.index and GLOW[level]
-                    or "\27[" .. rgb(beat, GLASS * level / GLOWS, 0, true) .. "m"
+
+        local function rgb(color, shade, white, ground)
+            local part = {}
+            for i = 1, 3 do
+                local v = back[i] + (color[i] - back[i]) * shade
+                part[i] = floor(v + (255 - v) * white + 0.5)
+            end
+            return string.format("%d;2;%d;%d;%d", ground and 48 or 38, part[1], part[2], part[3])
+        end
+
+        -- paint gives the code for the dots: step 1 to 4 from far to near, 5
+        -- lit. A palette color is faint far away and bright near; every code
+        -- sets the weight too, as the one before may have changed it.
+        local function paint(color, step)
+            local n = color.index
+            if not n then
+                return "\27[22;" .. rgb(color, SHADES[min(step, 4)], step == 5 and 0.55 or 0) .. "m"
+            end
+            local weight = "22;"
+            if step <= 2 then
+                weight = "22;2;"
+            elseif step == 5 then
+                weight = "22;1;"
+            end
+            if step >= 4 and n < 8 then
+                n = n + 8
+            end
+            return "\27[" .. weight .. indexed(n) .. "m"
+        end
+
+        local tower, ground, beat = ink("tower"), ink("floor"), ink("beat")
+        local drop = ink("drop") or beat
+        COLOR[GRID] = ground.index and paint(ground, 1) or "\27[22;" .. rgb(ground, 0.6, 0) .. "m"
+        for step = 1, 4 do
+            COLOR[T1 + step - 1] = paint(tower, step)
+        end
+        COLOR[LIT] = paint(tower, 5)
+        COLOR[BEAT] = paint(beat, 4)
+        COLOR[DROP] = paint(drop, 4)
+        COLOR[HOT] = paint(ink("hot"), 4)
+
+        -- The glass has the color of the towers, unless the theme or the
+        -- config names one. An RGB color gives shades of it. A palette color
+        -- has none: as the glass it is one flat shade where the glass is
+        -- dense enough, and towers of a palette color get dotted glass.
+        GLOW, WARM = {}, {}
+        glowing, dotted = false, false
+        GLOWS, GAIN = 16, 1
+        local wanted = conf("glass") or ""
+        if not wanted:match("^%s*off") then
+            glowing = true
+            local glass = ink("glass")
+            if wanted:match("^%s*dots") or not glass and tower.index then
+                glass = nil
+            elseif not glass then
+                glass = tower
+            end
+            if not glass then
+                dotted = true
+                GLOWS, GAIN = 4, 1.3
+            elseif glass.index then
+                GLOWS, GAIN = 1, 2
+                GLOW[1] = "\27[" .. indexed(glass.index, true) .. "m"
+                WARM = GLOW
+            else
+                for level = 1, GLOWS do
+                    GLOW[level] = "\27[" .. rgb(glass, GLASS * level / GLOWS, 0, true) .. "m"
+                    WARM[level] = drop.index and GLOW[level]
+                        or "\27[" .. rgb(drop, GLASS * level / GLOWS, 0, true) .. "m"
+                end
             end
         end
+    end
+end
+
+-- The theme: the one that the key picked last, if the config still names the
+-- theme that it named then, else the one that the config names. So the last
+-- act counts, a step of the key or a change of the config. worn is its name,
+-- and redress tells the next draw that the colors are new.
+local worn, redress = "mechanoonna", false
+local store = type(cliamp.store) == "table" and cliamp.store
+
+do
+    local named = conf("theme") or ""
+    local picked = store and store.get("theme")
+    if not (type(picked) == "string" and THEMES[picked] and store.get("config") == named) then
+        local unknown
+        picked, unknown = find(named)
+        if not picked and unknown ~= "" then
+            print("hackthegibson: no theme " .. unknown .. ", so it is " .. worn)
+        end
+    end
+    worn = picked or worn
+    dress(worn)
+
+    -- wear puts a theme on while cliamp runs, and keeps it for the next start.
+    local function wear(name)
+        worn, redress = name, true
+        dress(name)
+        if store then
+            store.set("theme", name)
+            store.set("config", named)
+        end
+        if type(cliamp.message) == "function" then
+            cliamp.message("Hack the Gibson: " .. THEMES[name].title)
+        end
+    end
+
+    -- A key steps to the next theme: ctrl+t, or the theme_key of the config;
+    -- "off" for none. A cliamp without keys for plugins has none either.
+    local key = (conf("theme_key") or "ctrl+t"):match("^[%s\"']*([%w+_%-]*)"):lower()
+    if key ~= "" and key ~= "off" and type(p.bind) == "function" then
+        local bound, why = p:bind(key, "Next theme", function()
+            for i, name in ipairs(ORDER) do
+                if name == worn then
+                    return wear(ORDER[i % #ORDER + 1])
+                end
+            end
+        end)
+        if not bound then
+            print("hackthegibson: no key for the themes: " .. tostring(why))
+        end
+    end
+
+    -- From a shell: cliamp plugins call "Hack the Gibson" theme tokyo-night.
+    -- Without a name it lists the themes.
+    if type(p.command) == "function" then
+        p:command("theme", function(args)
+            local name = find(type(args) == "table" and args[1] or "")
+            if name then
+                wear(name)
+                return THEMES[name].title
+            end
+            local names = {}
+            for i, known in ipairs(ORDER) do
+                names[i] = (known == worn and "* " or "  ") .. THEMES[known].title
+            end
+            return table.concat(names, "\n")
+        end)
     end
 end
 
@@ -1193,7 +1296,7 @@ do
         local tier = T1 + min(3, floor(fog * 4))
         if fog > 0.5 then
             if warp > 0.5 then
-                tier = BEAT
+                tier = DROP
             elseif level > 0.8 then
                 tier = LIT
             end
@@ -1317,8 +1420,11 @@ do
                     lit = level
                 end
                 if t ~= 0 and t ~= tier then
-                    n = n + 1
-                    out[n] = COLOR[t]
+                    -- Two tiers may have one color: a drop that of a frame.
+                    if COLOR[t] ~= COLOR[tier] then
+                        n = n + 1
+                        out[n] = COLOR[t]
+                    end
                     tier = t
                 end
                 n = n + 1
@@ -1428,6 +1534,9 @@ function p:render(bands, frame, rows, columns)
     if rows ~= shownRows or columns ~= shownCols then
         resize(rows, columns)
         shown, shownRows, shownCols = nil, rows, columns
+    end
+    if redress then
+        shown, redress = nil, false
     end
     -- cliamp shows 20 frames a second, so a frame drawn sooner is wasted.
     if not shown or dirty and (now - drawnAt > DRAW_GAP or status ~= "playing") then

@@ -55,16 +55,33 @@ type host struct {
 	clock  float64     // os.clock, in seconds
 	status string      // cliamp.player.state
 	frame  int
+
+	keys     map[string]*lua.LFunction // what the plugin bound with p:bind, by key
+	about    map[string]string         // and the description of each
+	commands map[string]*lua.LFunction // what it gave to p:command, by name
+	store    map[string]lua.LValue     // cliamp.store; it outlives the plugin
+	said     []string                  // what it passed to cliamp.message
 }
 
 // load runs the plugin file. config is its section of config.toml.
 func load(t testing.TB, config map[string]string) *host {
 	t.Helper()
+	return start(t, config, map[string]lua.LValue{}, nil)
+}
+
+// start runs the plugin file as cliamp does at its own start: store is what
+// the plugin kept from the runs before, and cliamp keeps the keys in taken
+// to itself.
+func start(t testing.TB, config map[string]string, store map[string]lua.LValue, taken []string) *host {
+	t.Helper()
 	src, err := os.ReadFile(source)
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &host{t: t, L: lua.NewState(), status: "playing"}
+	h := &host{
+		t: t, L: lua.NewState(), status: "playing", store: store,
+		keys: map[string]*lua.LFunction{}, about: map[string]string{}, commands: map[string]*lua.LFunction{},
+	}
 	t.Cleanup(h.L.Close)
 	L := h.L
 
@@ -87,8 +104,26 @@ func load(t testing.TB, config map[string]string) *host {
 		L.Push(lua.LString(h.status))
 		return 1
 	}))
+	kept := L.NewTable()
+	kept.RawSetString("get", L.NewFunction(func(L *lua.LState) int {
+		if v, ok := h.store[L.CheckString(1)]; ok {
+			L.Push(v)
+		} else {
+			L.Push(lua.LNil)
+		}
+		return 1
+	}))
+	kept.RawSetString("set", L.NewFunction(func(L *lua.LState) int {
+		h.store[L.CheckString(1)] = L.Get(2)
+		return 0
+	}))
 	cliamp := L.NewTable()
 	cliamp.RawSetString("player", player)
+	cliamp.RawSetString("store", kept)
+	cliamp.RawSetString("message", L.NewFunction(func(L *lua.LState) int {
+		h.said = append(h.said, L.CheckString(1))
+		return 0
+	}))
 	L.SetGlobal("cliamp", cliamp)
 
 	register := L.NewTable()
@@ -102,6 +137,23 @@ func load(t testing.TB, config map[string]string) *host {
 				L.Push(lua.LNil)
 			}
 			return 1
+		}))
+		// p:bind(key, description, fn), as cliamp has it: it lowers the key
+		// and refuses the keys of its own.
+		h.plugin.RawSetString("bind", L.NewFunction(func(L *lua.LState) int {
+			key := strings.ToLower(strings.TrimSpace(L.CheckString(2)))
+			if slices.Contains(taken, key) {
+				L.Push(lua.LFalse)
+				L.Push(lua.LString("key reserved by cliamp: " + key))
+				return 2
+			}
+			h.keys[key], h.about[key] = L.CheckFunction(4), L.CheckString(3)
+			L.Push(lua.LTrue)
+			return 1
+		}))
+		h.plugin.RawSetString("command", L.NewFunction(func(L *lua.LState) int {
+			h.commands[L.CheckString(2)] = L.CheckFunction(3)
+			return 0
 		}))
 		L.Push(h.plugin)
 		return 1
@@ -150,6 +202,40 @@ func (h *host) tick(bands [10]float64, rows, cols int, dt float64) string {
 		h.frame++
 	}
 	return h.draw(bands, rows, cols)
+}
+
+// press is the user pressing a key that the plugin bound.
+func (h *host) press(key string) {
+	h.t.Helper()
+	fn, ok := h.keys[key]
+	if !ok {
+		h.t.Fatalf("no key %q; the plugin bound %v", key, h.about)
+	}
+	if err := h.L.CallByParam(lua.P{Fn: fn, Protect: true}, lua.LString(key)); err != nil {
+		h.t.Fatalf("key %q: %v", key, err)
+	}
+}
+
+// call is `cliamp plugins call` of a command of the plugin.
+func (h *host) call(name string, args ...string) string {
+	h.t.Helper()
+	fn, ok := h.commands[name]
+	if !ok {
+		h.t.Fatalf("no command %q", name)
+	}
+	list := h.L.NewTable()
+	for _, arg := range args {
+		list.Append(lua.LString(arg))
+	}
+	if err := h.L.CallByParam(lua.P{Fn: fn, NRet: 1, Protect: true}, list); err != nil {
+		h.t.Fatalf("command %q: %v", name, err)
+	}
+	out := h.L.Get(-1)
+	h.L.Pop(1)
+	if out == lua.LNil {
+		return ""
+	}
+	return out.String()
 }
 
 // restart is what cliamp does when the mode is selected again.
@@ -247,8 +333,13 @@ func TestRegisters(t *testing.T) {
 			t.Errorf("%s = %q, want %q", key, got, want)
 		}
 	}
-	if h.meta.RawGetString("permissions") != lua.LNil {
-		t.Error("the plugin asks for permissions")
+	// The key that steps through the themes needs keymap, and nothing needs more.
+	var permissions []string
+	if list, ok := h.meta.RawGetString("permissions").(*lua.LTable); ok {
+		list.ForEach(func(_, v lua.LValue) { permissions = append(permissions, v.String()) })
+	}
+	if !slices.Equal(permissions, []string{"keymap"}) {
+		t.Errorf("the plugin asks for the permissions %v, want keymap only", permissions)
 	}
 	for _, name := range []string{"render", "init"} {
 		if _, ok := h.plugin.RawGetString(name).(*lua.LFunction); !ok {
@@ -710,18 +801,21 @@ func TestConfig(t *testing.T) {
 	}
 }
 
-// themes are the themes of the plugin, with the colors of the towers, the
-// ground, the frames of light and the heads of the pulses, and the
-// background of the terminal that they are made for.
+// themes are the themes of the plugin in the order of the key, with the
+// colors of the towers, the ground, the frames of light and the heads of the
+// pulses, the background of the terminal that they are made for, and, for
+// some, the glass and a drop.
 var themes = []struct {
-	name                          string
+	name, title                   string
 	tower, floor, beat, hot, back string
+	glass, drop                   string
 }{
-	{"mechanoonna", "#e7c07c", "#c5564a", "#d94e38", "#fff8e8", "#1c1b19"},
-	{"tokyo-night", "#7dcfff", "#bb9af7", "#f7768e", "#e0af68", "#1a1b26"},
-	{"catppuccin", "#cba6f7", "#89b4fa", "#f38ba8", "#f9e2af", "#1e1e2e"},
-	{"gruvbox", "#8ec07c", "#83a598", "#fe8019", "#fabd2f", "#282828"},
-	{"hackers", "#58c6a2", "#9375ee", "#ee75d2", "#deee75", "#000000"},
+	{"mechanoonna", "Mechanoonna", "#e7c07c", "#c5564a", "#d94e38", "#fff8e8", "#1c1b19", "", ""},
+	{"tokyo-night", "Tokyo Night", "#7dcfff", "#bb9af7", "#f7768e", "#e0af68", "#1a1b26", "", ""},
+	{"catppuccin", "Catppuccin", "#cba6f7", "#89b4fa", "#f38ba8", "#f9e2af", "#1e1e2e", "", ""},
+	{"gruvbox", "Gruvbox", "#8ec07c", "#83a598", "#fe8019", "#fabd2f", "#282828", "", ""},
+	{"hackers", "Hackers", "#81e3e8", "#6a66b7", "#a054e2", "#e6fdff", "#00020f", "#50c3bc", "#b75049"},
+	{"codepen", "CodePen", "#58c6a2", "#9375ee", "#ee75d2", "#deee75", "#000000", "", ""},
 }
 
 func rgb(t testing.TB, hex string) color.RGBA {
@@ -748,7 +842,11 @@ func frame(t *testing.T, config map[string]string) string {
 func TestThemes(t *testing.T) {
 	for _, th := range themes {
 		t.Run(th.name, func(t *testing.T) {
-			want := frame(t, map[string]string{"tower": th.tower, "floor": th.floor, "beat": th.beat, "hot": th.hot, "back": th.back})
+			colors := map[string]string{"tower": th.tower, "floor": th.floor, "beat": th.beat, "hot": th.hot, "back": th.back}
+			if th.glass != "" {
+				colors["glass"], colors["drop"] = th.glass, th.drop
+			}
+			want := frame(t, colors)
 			if got := frame(t, map[string]string{"theme": th.name}); got != want {
 				t.Errorf("theme %q does not have the colors %+v", th.name, th)
 			}
@@ -793,6 +891,129 @@ func TestThemes(t *testing.T) {
 	if !strings.Contains(term, "\x1b[22;2;34m") || glass.FindString(term) != "" {
 		t.Error("the terminal theme does not have the palette colors of the terminal")
 	}
+}
+
+// A key steps through the themes while cliamp runs, and the plugin keeps the
+// theme for the next start. Of that key and the config, the last act counts.
+func TestThemeKey(t *testing.T) {
+	// after gives the frame after three seconds of music and some presses.
+	after := func(h *host, presses int) string {
+		t.Helper()
+		for i := range 60 {
+			h.tick(music(128, float64(i)*tick, 1), 7, 76, tick)
+		}
+		for range presses {
+			h.press("ctrl+t")
+		}
+		return h.tick(music(128, 3, 1), 7, 76, tick)
+	}
+	names := []string{"mechanoonna", "tokyo-night", "catppuccin", "gruvbox", "hackers", "codepen", "terminal"}
+	titles := []string{"Mechanoonna", "Tokyo Night", "Catppuccin", "Gruvbox", "Hackers", "CodePen", "Terminal"}
+	for presses := range len(names) + 2 {
+		want := names[presses%len(names)]
+		h := load(t, nil)
+		if got := after(h, presses); got != after(load(t, map[string]string{"theme": want}), 0) {
+			t.Errorf("%d presses of the key do not give the theme %s", presses, want)
+		}
+		if presses > 0 {
+			if said := h.said[len(h.said)-1]; said != "Hack the Gibson: "+titles[presses%len(names)] {
+				t.Errorf("after %d presses the plugin says %q", presses, said)
+			}
+		}
+	}
+	if about := load(t, nil).about["ctrl+t"]; about != "Next theme" {
+		t.Errorf("the key is described as %q", about)
+	}
+
+	// The theme is new at once, also while nothing plays.
+	h := load(t, nil)
+	h.status = "stopped"
+	before := h.tick([10]float64{}, 7, 76, tick)
+	h.press("ctrl+t")
+	if h.tick([10]float64{}, 7, 76, tick) == before {
+		t.Error("a press shows only when the music plays")
+	}
+
+	// The next start has the theme that the key picked.
+	store := map[string]lua.LValue{}
+	h = start(t, nil, store, nil)
+	h.press("ctrl+t")
+	h.press("ctrl+t")
+	catppuccin := after(load(t, map[string]string{"theme": "catppuccin"}), 0)
+	if after(start(t, nil, store, nil), 0) != catppuccin {
+		t.Error("the theme of the key is gone after a start")
+	}
+	// A change of the config since then counts more, and a step after it more again.
+	gruvbox := map[string]string{"theme": "gruvbox"}
+	if after(start(t, gruvbox, store, nil), 0) != after(load(t, gruvbox), 0) {
+		t.Error("the theme of the key hides a change of the config")
+	}
+	h = start(t, gruvbox, store, nil)
+	h.press("ctrl+t")
+	hackers := after(load(t, map[string]string{"theme": "hackers"}), 0)
+	if after(start(t, gruvbox, store, nil), 0) != hackers {
+		t.Error("a step after a change of the config is gone after a start")
+	}
+	// What the store has may be anything.
+	for _, junk := range []lua.LValue{lua.LString("no such theme"), lua.LNumber(7), lua.LTrue} {
+		odd := map[string]lua.LValue{"theme": junk, "config": lua.LString("")}
+		if after(start(t, nil, odd, nil), 0) != after(load(t, nil), 0) {
+			t.Errorf("%v in the store is not the default theme", junk)
+		}
+	}
+
+	// The key is one of the config, or none, or one that cliamp keeps.
+	for _, tc := range []struct {
+		key, bound string
+		taken      []string
+	}{
+		{"ctrl+n", "ctrl+n", nil},
+		{" Ctrl+N  # next", "ctrl+n", nil},
+		{"off", "", nil},
+		{"", "", nil},
+		{"ctrl+t", "", []string{"ctrl+t"}},
+	} {
+		h := start(t, map[string]string{"theme_key": tc.key}, map[string]lua.LValue{}, tc.taken)
+		var bound []string
+		for key := range h.keys {
+			bound = append(bound, key)
+		}
+		if tc.bound == "" && len(bound) > 0 || tc.bound != "" && !slices.Equal(bound, []string{tc.bound}) {
+			t.Errorf("theme_key %q binds %v, want %q", tc.key, bound, tc.bound)
+		}
+		checkFrame(t, h.tick(music(128, 0, 1), 7, 76, tick), 7, 76)
+	}
+}
+
+// `cliamp plugins call "Hack the Gibson" theme` puts a theme on, or lists them.
+func TestThemeCommand(t *testing.T) {
+	h := load(t, nil)
+	for i := range 60 {
+		h.tick(music(128, float64(i)*tick, 1), 7, 76, tick)
+	}
+	if out := h.call("theme", "Tokyo Night"); out != "Tokyo Night" {
+		t.Errorf("the command answers %q", out)
+	}
+	if h.tick(music(128, 3, 1), 7, 76, tick) != frame61(t, "tokyo-night") {
+		t.Error("the command does not put the theme on")
+	}
+	list := h.call("theme")
+	if !strings.Contains(list, "* Tokyo Night") || !strings.Contains(list, "  Hackers") {
+		t.Errorf("the command lists\n%s", list)
+	}
+	if h.call("theme", "no such theme") != list {
+		t.Error("a name that is no theme does not list the themes")
+	}
+}
+
+// frame61 gives the frame of a theme one tick after three seconds of music.
+func frame61(t *testing.T, theme string) string {
+	t.Helper()
+	h := load(t, map[string]string{"theme": theme})
+	for i := range 60 {
+		h.tick(music(128, float64(i)*tick, 1), 7, 76, tick)
+	}
+	return h.tick(music(128, 3, 1), 7, 76, tick)
 }
 
 // With -themes=dir the test writes a picture of each theme, for the README.
