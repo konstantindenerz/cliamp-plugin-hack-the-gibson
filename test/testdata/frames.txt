@@ -1,0 +1,16 @@
+breaks 13x3: 639cfcd42822b2ed
+breaks 40x1: df55af3d75e21cc9
+breaks 76x7: 6c5ff1c9fe414588
+breaks 140x40: b8998c2157751688
+drop 13x3: 53659287c193ac17
+drop 40x1: 25b3b1d256304e84
+drop 76x7: d6fc44e98241626e
+drop 140x40: a4e0064ef9705945
+music 13x3: 97e40d7c37e5ea5b
+music 40x1: 8f5bfda753ec988f
+music 76x7: 701d0704b7f56f50
+music 140x40: dd6da1efdf86a93b
+silence 13x3: fdad1bdc23581229
+silence 40x1: bd7fe181f301cd69
+silence 76x7: d4e1f5a5fee8b99e
+silence 140x40: ae97e9a2a16b9283
