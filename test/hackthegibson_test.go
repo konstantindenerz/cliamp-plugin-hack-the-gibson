@@ -25,8 +25,9 @@ import (
 )
 
 var (
-	update = flag.Bool("update", false, "rewrite testdata/frames.txt")
-	shots  = flag.String("shots", "", "write pictures of some frames to this directory")
+	update  = flag.Bool("update", false, "rewrite testdata/frames.txt")
+	shots   = flag.String("shots", "", "write pictures of some frames to this directory")
+	gallery = flag.String("themes", "", "write a picture of each theme to this directory")
 )
 
 const (
@@ -709,6 +710,120 @@ func TestConfig(t *testing.T) {
 	}
 }
 
+// themes are the themes of the plugin, with the colors of the towers, the
+// ground, the frames of light and the heads of the pulses, and the
+// background of the terminal that they are made for.
+var themes = []struct {
+	name                          string
+	tower, floor, beat, hot, back string
+}{
+	{"mechanoonna", "#e7c07c", "#c5564a", "#d94e38", "#fff8e8", "#1c1b19"},
+	{"tokyo-night", "#7dcfff", "#bb9af7", "#f7768e", "#e0af68", "#1a1b26"},
+	{"catppuccin", "#cba6f7", "#89b4fa", "#f38ba8", "#f9e2af", "#1e1e2e"},
+	{"gruvbox", "#8ec07c", "#83a598", "#fe8019", "#fabd2f", "#282828"},
+	{"hackers", "#58c6a2", "#9375ee", "#ee75d2", "#deee75", "#000000"},
+}
+
+func rgb(t testing.TB, hex string) color.RGBA {
+	t.Helper()
+	n, err := strconv.ParseUint(strings.TrimPrefix(hex, "#"), 16, 32)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return color.RGBA{uint8(n >> 16), uint8(n >> 8), uint8(n), 255}
+}
+
+// frame gives the frame after three seconds of music under a config.
+func frame(t *testing.T, config map[string]string) string {
+	t.Helper()
+	h := load(t, config)
+	out := ""
+	for i := range 60 {
+		out = h.tick(music(128, float64(i)*tick, 1), 7, 76, tick)
+	}
+	return out
+}
+
+// A theme is the same as its colors, key by key, and it has many names.
+func TestThemes(t *testing.T) {
+	for _, th := range themes {
+		t.Run(th.name, func(t *testing.T) {
+			want := frame(t, map[string]string{"tower": th.tower, "floor": th.floor, "beat": th.beat, "hot": th.hot, "back": th.back})
+			if got := frame(t, map[string]string{"theme": th.name}); got != want {
+				t.Errorf("theme %q does not have the colors %+v", th.name, th)
+			}
+			// The ground is the color of the theme at 0.6 of the way from the background.
+			floor, back := rgb(t, th.floor), rgb(t, th.back)
+			mix := func(a, b uint8) int { return int(math.Floor(float64(b) + (float64(a)-float64(b))*0.6 + 0.5)) }
+			code := fmt.Sprintf("\x1b[22;38;2;%d;%d;%dm", mix(floor.R, back.R), mix(floor.G, back.G), mix(floor.B, back.B))
+			if !strings.Contains(want, code) {
+				t.Errorf("no ground of %q in the frame", code)
+			}
+			checkFrame(t, want, 7, 76)
+		})
+	}
+
+	tokyo := frame(t, map[string]string{"theme": "tokyo-night"})
+	for _, name := range []string{"Tokyo Night", "tokyonight", "TOKYO_NIGHT", " tokyo night  # the blue one", "tokyo-night-storm", "\"tokyo-night\""} {
+		if frame(t, map[string]string{"theme": name}) != tokyo {
+			t.Errorf("theme %q is not tokyo-night", name)
+		}
+	}
+	plain := frame(t, nil)
+	if frame(t, map[string]string{"theme": "mechanoonna"}) != plain {
+		t.Error("the default theme is not mechanoonna")
+	}
+	for _, name := range []string{"no such theme", "", "#58c6a2", "tokyo", "7\x1b[2J"} {
+		if frame(t, map[string]string{"theme": name}) != plain {
+			t.Errorf("theme %q is not the default one", name)
+		}
+	}
+	if tokyo == plain {
+		t.Error("tokyo-night looks like mechanoonna")
+	}
+
+	// A color of the config goes before the one of the theme.
+	mixed := frame(t, map[string]string{"theme": "tokyo-night", "floor": "#102030"})
+	if mixed == tokyo || !strings.Contains(mixed, "\x1b[22;38;2;20;30;44m") {
+		t.Error("the floor of the config does not replace the one of the theme")
+	}
+
+	// The theme of the terminal has palette colors and dotted glass.
+	term := frame(t, map[string]string{"theme": "terminal"})
+	if !strings.Contains(term, "\x1b[22;2;34m") || glass.FindString(term) != "" {
+		t.Error("the terminal theme does not have the palette colors of the terminal")
+	}
+}
+
+// With -themes=dir the test writes a picture of each theme, for the README.
+func TestGallery(t *testing.T) {
+	if *gallery == "" {
+		t.Skip("no -themes directory")
+	}
+	if err := os.MkdirAll(*gallery, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	const rows, cols = 26, 100
+	for _, th := range themes {
+		h := load(t, map[string]string{"theme": th.name})
+		out := ""
+		for i, s := range scenes()["music"] {
+			if float64(i)*tick > 4.2 {
+				break
+			}
+			out = h.tick(s.bands, rows, cols, tick)
+		}
+		file, err := os.Create(filepath.Join(*gallery, th.name+".png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := png.Encode(file, picture(out, rows, cols, rgb(t, th.back))); err != nil {
+			t.Fatal(err)
+		}
+		file.Close()
+	}
+}
+
 // Dotted glass is dots of its own: cells that are blank without it.
 func TestGlassOfDots(t *testing.T) {
 	cells := func(config map[string]string) int {
@@ -819,10 +934,9 @@ var theme = [16]color.RGBA{
 }
 
 // picture paints a frame as a terminal would: 4 pixels per Braille dot.
-func picture(out string, rows, cols int) image.Image {
+func picture(out string, rows, cols int, ground color.RGBA) image.Image {
 	const px = 4
 	img := image.NewRGBA(image.Rect(0, 0, cols*2*px, rows*4*px))
-	ground := theme[0]
 	text := color.RGBA{0xf0, 0xe4, 0xc5, 255}
 	fg, bg, faint := text, ground, false
 	x, y := 0, 0
@@ -923,7 +1037,7 @@ func TestShots(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if err := png.Encode(file, picture(out, shot.rows, shot.cols)); err != nil {
+				if err := png.Encode(file, picture(out, shot.rows, shot.cols, theme[0])); err != nil {
 					t.Fatal(err)
 				}
 				file.Close()

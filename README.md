@@ -18,53 +18,54 @@ Start cliamp and press `v` until you reach `Hack the Gibson`, or pick it with `C
 cliamp plugins remove hackthegibson
 ```
 
+## Themes
+
+The colors of a terminal have no shades, and the towers need them: the far ones fade, and their glass is a tint. So the plugin comes with themes. Pick one in `~/.config/cliamp/config.toml`:
+
+```toml
+[plugins.hackthegibson]
+theme = "tokyo-night"
+```
+
+| Theme | |
+|---|---|
+| `mechanoonna` | ![mechanoonna](assets/themes/mechanoonna.png) |
+| `tokyo-night` | ![tokyo-night](assets/themes/tokyo-night.png) |
+| `catppuccin` | ![catppuccin](assets/themes/catppuccin.png) |
+| `gruvbox` | ![gruvbox](assets/themes/gruvbox.png) |
+| `hackers` | ![hackers](assets/themes/hackers.png) |
+
+`mechanoonna` is the default: the amber and red of the Ghostty theme [Mechanoonna](https://github.com/HANCORE-linux/omarchy-mechanoonna-theme). `catppuccin` is Mocha, `gruvbox` the dark one. `hackers` has the colors of the film, as in the CSS demo. A sixth theme, `terminal`, takes the cyan, blue, red and yellow of the terminal itself; see below for what that costs.
+
+The name may be written as you like: `Tokyo Night`, `tokyo_night` and `tokyonight` are the same theme, and so are `catppuccin-mocha` and `gruvbox-dark`. A name that the plugin does not know gives the default theme and a line in `~/.config/cliamp/plugins.log`.
+
 ## Configuration
 
-The plugin needs no configuration. These keys are optional and go into `~/.config/cliamp/config.toml`; the values below are the defaults:
+The plugin needs no configuration. These keys are optional; the values below are the defaults:
 
 ```toml
 [plugins.hackthegibson]
+theme = "mechanoonna"
 # Wait this long before the city reacts, when it is ahead of the sound.
 delay_ms = 0
-# Colors: "#rrggbb" or a palette index (0-255).
-# Towers, ground, frames of light and drops, heads of the pulses.
-tower = "#e7c07c"
-floor = "#c5564a"
-beat = "#d94e38"
-hot = "#fff8e8"
-# The background of the terminal, as "#rrggbb".
-back = "#1c1b19"
-# The glass of the towers: a color, "dots" or "off". The default is the
-# color of the towers.
-# glass = "#e7c07c"
 ```
 
-The default colors are the amber and red of the Ghostty theme [Mechanoonna](https://github.com/HANCORE-linux/omarchy-mechanoonna-theme). A plugin cannot read the theme of the terminal or of cliamp, so set the colors of your own theme here.
-
-A color given as `#rrggbb` has shades: the towers far away fade into `back`, and the glass is a background color between `back` and its own color, denser where a tower is near or loud. Set `back` to the background of your terminal, or the far towers and the thin glass stand out as dark or bright cells. The shades need a terminal with 24-bit color.
-
-A palette index follows the theme of the terminal, but it has no shades. Towers of a palette color are faint far away and take the bright color of the same name when near: 14 for 6. Their glass is a grid of dots, which `glass = "dots"` gives to towers of any color. A palette index as `glass` is one flat background color.
-
-The colors of the terminal:
+A theme of your own is five colors. Each of these keys replaces the color of the theme, so copy the block and change what you like:
 
 ```toml
 [plugins.hackthegibson]
-tower = 6
-floor = 4
-beat = 9
-hot = 11
+tower = "#e7c07c" # the towers and their code
+floor = "#c5564a" # the grid of the ground
+beat = "#d94e38"  # the frames of light of a snare, and a drop
+hot = "#fff8e8"   # the heads of the pulses of a kick
+back = "#1c1b19"  # the background of the terminal
 ```
 
-The colors of the CSS demo:
+Set `back` to the background of your terminal: the towers far away fade into it, and the glass is a background color between it and the color of the towers. With another `back` the far towers and the thin glass stand out as dark or bright cells. The shades need a terminal with 24-bit color.
 
-```toml
-[plugins.hackthegibson]
-tower = "#58C6A2"
-floor = "#9375ee"
-beat = "#ee75d2"
-hot = "#deee75"
-back = "#000000"
-```
+A color may be a palette index (0-255) instead of `#rrggbb`; the theme `terminal` is made of those. Such a color follows the theme of the terminal, but it has no shades: the towers are faint far away and take the bright color of the same name when near, 14 for 6, and their glass is a grid of dots.
+
+The glass has a key of its own, `glass`: `"dots"` gives the grid of dots to towers of any color, `"off"` gives none, `"#rrggbb"` gives glass of another color than the towers, and a palette index gives one flat background color.
 
 ## Notes
 
@@ -100,7 +101,7 @@ go run . -record ../testdata/bands ../../hackthegibson.lua  # record the bands a
 go run . -pcm dir ../../hackthegibson.lua                   # music of your own: *.f32, mono, 44.1 kHz
 ```
 
-After a change that is meant to alter the picture, `go test -update` records the frames in `test/testdata/frames.txt` again. `go test -run TestShots -shots=/tmp/shots` writes some frames as PNG files, to look at without cliamp.
+After a change that is meant to alter the picture, `go test -update` records the frames in `test/testdata/frames.txt` again. `go test -run TestShots -shots=/tmp/shots` writes some frames as PNG files, to look at without cliamp. `go test -run TestGallery -themes=../assets/themes` draws the pictures of the themes again.
 
 ## License
 

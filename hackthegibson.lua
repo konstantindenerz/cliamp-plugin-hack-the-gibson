@@ -59,27 +59,70 @@ do
     local SHADES = { 0.22, 0.42, 0.68, 1 }
     local GLASS = 0.5
 
+    -- The themes: the colors of the towers, the ground, the frames of light
+    -- and the heads of the pulses, and the background of the terminal that
+    -- they are made for. hackers has the colors of the film, as in the CSS
+    -- demo; terminal has those of the terminal itself, by palette index.
+    local THEMES = {
+        mechanoonna = { tower = "e7c07c", floor = "c5564a", beat = "d94e38", hot = "fff8e8", back = "1c1b19" },
+        tokyonight = { tower = "7dcfff", floor = "bb9af7", beat = "f7768e", hot = "e0af68", back = "1a1b26" },
+        catppuccin = { tower = "cba6f7", floor = "89b4fa", beat = "f38ba8", hot = "f9e2af", back = "1e1e2e" },
+        gruvbox = { tower = "8ec07c", floor = "83a598", beat = "fe8019", hot = "fabd2f", back = "282828" },
+        hackers = { tower = "58c6a2", floor = "9375ee", beat = "ee75d2", hot = "deee75", back = "000000" },
+        terminal = { tower = 6, floor = 4, beat = 9, hot = 11, back = "000000" },
+    }
+    local DEFAULT = "mechanoonna"
+
+    -- The name of a theme, as the config has it: "Tokyo Night", "tokyo-night"
+    -- and "tokyonight" are one theme, and so is a longer name that starts
+    -- with one, as "catppuccin-mocha".
+    local theme = THEMES[DEFAULT]
+    do
+        local name = (conf("theme") or ""):match("^[%s\"']*([%w _%-]*)"):lower():gsub("[^%w]", "")
+        local found = THEMES[name]
+        for known, colors in pairs(THEMES) do
+            if not found and #known < #name and name:sub(1, #known) == known then
+                found = colors
+            end
+        end
+        if found then
+            theme = found
+        elseif name ~= "" then
+            print("hackthegibson: no theme " .. name .. ", so it is " .. DEFAULT)
+        end
+    end
+
+    local function parts(hex)
+        return { tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16) }
+    end
+
     -- A color is "#rrggbb" or a palette index (0-255). The first has shades,
-    -- the second follows the theme of the terminal. The defaults are the
-    -- colors of the Ghostty theme Mechanoonna: amber and red on a dark ground.
-    local function ink(key, default)
+    -- the second follows the theme of the terminal. A key of the config that
+    -- names no color has the color of the theme.
+    local function ink(key)
         local value = conf(key)
         local hex = value and value:match("^%s*#(%x%x%x%x%x%x)")
         local index = not hex and tonumber(value and value:match("^%s*(%d+)") or "")
+        if not hex and not index then
+            local color = theme[key]
+            if type(color) == "number" then
+                index = color
+            else
+                hex = color
+            end
+        end
         if index then
             return { index = min(index, 255) }
         end
-        hex = hex or default
-        return hex and {
-            tonumber(hex:sub(1, 2), 16), tonumber(hex:sub(3, 4), 16), tonumber(hex:sub(5, 6), 16),
-        }
+        return hex and parts(hex)
     end
 
     -- The ground of the terminal. A shade of a color is that far from here
-    -- to the color, so the towers far away fade into the ground.
-    local back = ink("back", "1c1b19")
+    -- to the color, so the towers far away fade into the ground. A palette
+    -- index will not do here.
+    local back = ink("back")
     if back.index then
-        back = { 0x1c, 0x1b, 0x19 }
+        back = parts(theme.back)
     end
 
     -- indexed gives the code of a palette color, for the dots or the ground
@@ -122,14 +165,14 @@ do
         return "\27[" .. weight .. indexed(n) .. "m"
     end
 
-    local tower, floor_, beat = ink("tower", "e7c07c"), ink("floor", "c5564a"), ink("beat", "d94e38")
+    local tower, floor_, beat = ink("tower"), ink("floor"), ink("beat")
     COLOR[GRID] = floor_.index and paint(floor_, 1) or "\27[22;" .. rgb(floor_, 0.6, 0) .. "m"
     for step = 1, 4 do
         COLOR[T1 + step - 1] = paint(tower, step)
     end
     COLOR[LIT] = paint(tower, 5)
     COLOR[BEAT] = paint(beat, 4)
-    COLOR[HOT] = paint(ink("hot", "fff8e8"), 4)
+    COLOR[HOT] = paint(ink("hot"), 4)
 
     -- The glass has the color of the towers, unless the config names one.
     -- An RGB color gives shades of it. A palette color has none: as the glass
