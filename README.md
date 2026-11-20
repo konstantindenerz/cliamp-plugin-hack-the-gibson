@@ -120,7 +120,7 @@ go run . -record ../testdata/bands ../../hack-the-gibson.lua  # record the bands
 go run . -pcm dir ../../hack-the-gibson.lua                   # music of your own: *.f32, mono, 44.1 kHz
 ```
 
-After a change that is meant to alter the picture, `go test -update` records the frames again. They are in `test/testdata/frames_arm64.txt` and `frames_amd64.txt`, as the two architectures round their numbers differently; `GOARCH=amd64 go test -update` records the other one on a Mac. `go test -run TestShots -shots=/tmp/shots` writes some frames as PNG files, to look at without cliamp. `go test -run TestGallery -themes=../assets/themes` draws the pictures of the themes again.
+After a change that is meant to alter the picture, `go test -update` records the frames in `test/testdata/frames_arm64.txt` again. The test of the frames runs on arm64 only: processors differ in the last bit of a number, which moves a dot into the next cell, so the CI on amd64 skips it and runs the other tests. `go test -run TestShots -shots=/tmp/shots` writes some frames as PNG files, to look at without cliamp. `go test -run TestGallery -themes=../assets/themes` draws the pictures of the themes again.
 
 ## License
 

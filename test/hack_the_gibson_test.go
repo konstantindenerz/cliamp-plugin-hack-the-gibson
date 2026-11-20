@@ -33,9 +33,11 @@ var (
 
 const (
 	source = "../hack-the-gibson.lua"
-	// The frames differ from one architecture to the next: arm64 does a
-	// multiplication and an addition in one step, and rounds once where
-	// amd64 rounds twice. A dot at the edge of a cell is then in the next.
+	// The frames differ from one processor to the next in the last bit of a
+	// number: arm64 does a multiplication and an addition in one step, and
+	// amd64 does so in some of its math when the processor can. A dot at the
+	// edge of a cell is then in the next. So the frames are those of arm64,
+	// where they were recorded, and the test of them runs there only.
 	golden = "testdata/frames_" + runtime.GOARCH + ".txt"
 	tick   = 0.05 // s between two ticks of cliamp
 
@@ -424,7 +426,7 @@ func scenes() map[string][]step {
 func TestFrames(t *testing.T) {
 	want := map[string]string{}
 	if _, err := os.Stat(golden); err != nil && !*update {
-		t.Skipf("no frames for %s; go test -update records them", runtime.GOARCH)
+		t.Skipf("no frames for %s: they are not the same from one processor to the next", runtime.GOARCH)
 	}
 	if file, err := os.Open(golden); err == nil {
 		lines := bufio.NewScanner(file)
