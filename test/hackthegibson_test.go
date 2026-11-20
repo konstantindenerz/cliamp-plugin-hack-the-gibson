@@ -458,14 +458,20 @@ func TestFrames(t *testing.T) {
 	}
 }
 
-// fold gives the beat that the plugin flies to for a beat period in seconds:
-// it takes half or twice a period to stay between 0.35 and 0.71 s, 85 to 170
-// BPM, so the eye flies at a like speed to any track.
-func fold(period float64) float64 {
-	for period > math.Sqrt2/2 {
+// fold gives the beat that the plugin flies to for a beat period in seconds.
+// What is in the bands does not tell a beat from half or twice of it, so the
+// plugin takes the one between 0.35 and 0.71 s, 85 to 170 BPM; and in calm
+// music, which has next to nothing in its top bands, the one between 0.55 and
+// 1.1 s, 55 to 110 BPM.
+func fold(period float64, calm bool) float64 {
+	least := math.Sqrt2 / 4
+	if calm {
+		least = 0.55
+	}
+	for period >= 2*least {
 		period /= 2
 	}
-	for period < math.Sqrt2/4 {
+	for period < least {
 		period *= 2
 	}
 	return period
@@ -485,7 +491,7 @@ func TestFollowsTempo(t *testing.T) {
 				}
 			}
 			state := h.flight()
-			want := 1 / fold(60/bpm)
+			want := 1 / fold(60/bpm, false)
 			if got := mean / float64(n); state.sure != 1 || math.Abs(got-want) > 0.03*want {
 				t.Fatalf("speed %.4f blocks/s, tempo sure %.2f, beat %.3f s; want %.4f and 1", got, state.sure, state.beat, want)
 			}
@@ -592,16 +598,18 @@ func TestHearsTheDrums(t *testing.T) {
 	for _, tc := range []struct {
 		name                string
 		kicks, snares, hats float64 // the share of each that it must find; -1 = it must find none
+		calm                bool    // the track has nothing in its top bands
 	}{
-		{"house", 0.95, 0.9, 0},
-		{"techno", 0.95, 0, 0},
-		{"rock", 0.95, 0.9, 0},
-		{"dnb", 0.9, 0.85, 0},
-		{"trap", 0.9, 0.9, 0},
-		{"kick", 0.95, -1, -1},
-		{"snare", 0, 0.95, -1},
-		{"hats", -1, -1, 0.95},
-		{"nodrums", -1, -1, -1},
+		{"house", 0.95, 0.9, 0, false},
+		{"techno", 0.95, 0, 0, false},
+		{"rock", 0.95, 0.9, 0, false},
+		{"dnb", 0.9, 0.85, 0, false},
+		{"trap", 0.9, 0.9, 0, false},
+		{"kick", 0.95, -1, -1, true},
+		{"snare", 0, 0.95, -1, false},
+		{"hats", -1, -1, 0.95, false},
+		{"nodrums", -1, -1, -1, true},
+		{"lofi", 0.75, 0.5, 0, true}, // its drums are soft
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r := readBands(t, tc.name)
@@ -658,7 +666,7 @@ func TestHearsTheDrums(t *testing.T) {
 			// The tempo, over the second half of the track.
 			half := beats[len(beats)-len(sure):]
 			slices.Sort(half)
-			beat, want := half[len(half)/2], fold(60/r.bpm)
+			beat, want := half[len(half)/2], fold(60/r.bpm, tc.calm)
 			mean := 0.0
 			for _, v := range sure {
 				mean += v / float64(len(sure))
@@ -668,6 +676,43 @@ func TestHearsTheDrums(t *testing.T) {
 				t.Errorf("beat %.3f s, sure %.2f; want %.3f s and at least 0.75", beat, mean, want)
 			}
 		})
+	}
+}
+
+// Calm music flies calmly: lo-fi at 75 BPM takes a block per beat, not two,
+// and no faster as the minutes go by.
+func TestCalmMusicFliesSlowly(t *testing.T) {
+	r := readBands(t, "lofi")
+	h := load(t, nil)
+	var minute [5]float64
+	const ticks = 60 / tick
+	for i := range int(5 * ticks) {
+		// The track is 30 s long; play it over and over.
+		h.tick(r.bands[i%len(r.bands)], 3, 20, tick)
+		minute[int(float64(i)/ticks)] += h.flight().speed / ticks
+	}
+	t.Logf("blocks/s, minute by minute: %.2f", minute)
+	want := r.bpm / 60
+	for i, speed := range minute[1:] {
+		if math.Abs(speed-want) > 0.08*want {
+			t.Errorf("minute %d: %.2f blocks/s, want %.2f", i+2, speed, want)
+		}
+	}
+	if minute[4] > 1.05*minute[1] {
+		t.Errorf("the eye gets faster: %.2f blocks/s in minute 5, %.2f in minute 2", minute[4], minute[1])
+	}
+
+	// The speed of the config is a factor on it.
+	slow := load(t, map[string]string{"speed": "0.5"})
+	mean := 0.0
+	for i := range int(2 * ticks) {
+		slow.tick(r.bands[i%len(r.bands)], 3, 20, tick)
+		if i >= int(ticks) {
+			mean += slow.flight().speed / ticks
+		}
+	}
+	if math.Abs(mean-minute[1]/2) > 0.05*minute[1] {
+		t.Errorf("speed = 0.5 gives %.2f blocks/s, half of %.2f is wanted", mean, minute[1])
 	}
 }
 

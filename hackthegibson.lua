@@ -368,6 +368,11 @@ local function reset()
         sure = 0,
         rival = 0,
         rivals = 0,
+        -- Slow averages of the top bands and of all, and whether the music is
+        -- calm: muffled, as lo-fi is.
+        slowTop = 0,
+        slowAll = 0,
+        calm = false,
         fastE = 0,
         slowE = 0,
         warpAt = -huge,
@@ -474,7 +479,8 @@ end
 local play, rest
 
 do
-    -- Speed in blocks/s.
+    -- Speed in blocks/s, and the speed of the config: a factor on all of it.
+    local SPEED = max(0.25, min(2, tonumber((conf("speed") or ""):match("^%s*([%d.]+)") or "") or 1))
     local CRUISE = 0.5
     local LOUD_GAIN = 0.4
     local WARP_GAIN = 0.6 -- the share a drop adds
@@ -490,7 +496,13 @@ do
     local LAG_MIN, LAG_MAX = 13, 40
     local PART_WEIGHT = { 1, 1, 0.5 }
     local PRIOR_WIDTH = 1.0 -- in octaves
-    local FOLD = 0.5 * 2 ^ 0.5 -- s; a longer period is two beats
+    -- A beat lasts from FOLD to twice FOLD seconds: 85 to 170 BPM, and 55 to
+    -- 110 BPM in calm music. Calm is music with next to nothing in the top
+    -- bands; the share of those is MUFFLED at most, and BRIGHT at least again.
+    -- A beat may be out of its range by EDGE before it is folded again.
+    local FOLD, FOLD_CALM = 0.5 / 2 ^ 0.5, 0.55
+    local MUFFLED, BRIGHT = 0.045, 0.06
+    local EDGE = 1.08
     local SALIENT = 1.5 -- a beat stands out this much from the other periods
     local SAME = 0.06 -- two periods this close are one tempo
     local MARGIN = 1.3 -- another tempo must fit this much better
@@ -607,6 +619,47 @@ do
         return max(-0.5, min(0.5, 0.5 * (before - after) / bend))
     end
 
+    -- fold gives the beat of a period. Music repeats every two beats more
+    -- than every one, and its eighths repeat too, so the period may be twice
+    -- the beat or half of it. What tells them apart is not in the bands, so
+    -- the beat is the one in the range of the music: lively or calm.
+    local function fold(period)
+        local least = s.calm and FOLD_CALM or FOLD
+        while period >= 2 * least do
+            period = period / 2
+        end
+        while period < least do
+            period = period * 2
+        end
+        return period
+    end
+
+    -- mood tells calm music from lively by its top bands, and gives the
+    -- beat its new range when the music changes.
+    local function mood(top, all)
+        if all < SILENCE then
+            return
+        end
+        if s.slowAll == 0 then
+            s.slowTop, s.slowAll = top, all
+        end
+        s.slowTop = s.slowTop + (top - s.slowTop) * K_SLOW
+        s.slowAll = s.slowAll + (all - s.slowAll) * K_SLOW
+        local share = s.slowTop / s.slowAll
+        local calm = s.calm
+        if share < MUFFLED then
+            calm = true
+        elseif share > BRIGHT then
+            calm = false
+        end
+        if calm ~= s.calm then
+            s.calm = calm
+            if s.beat > 0 then
+                s.beat = fold(s.beat)
+            end
+        end
+    end
+
     -- held tells how well the beat that the eye flies to fits the music now:
     -- the best score of the periods near it, near half of it and twice it.
     local function held()
@@ -677,13 +730,19 @@ do
             end
         end
         local period = (at + crest(echoes[at - 1], peak, echoes[at + 1])) / 4 * TICK
-        -- Music repeats every two beats more than every one, so the period
-        -- may be twice the beat, or half of it. Take the one nearest to half
-        -- a second: the eye then flies at a like speed to any track.
-        if period > FOLD and period / 2 >= LAG_MIN * TICK then
+        period = fold(period)
+        -- A period right at the end of that range is on the other side of
+        -- it at the next look. Stay with the beat of before then, or the
+        -- eye flies twice as fast all of a sudden; but not with a beat that
+        -- has left the range for good.
+        local least = s.calm and FOLD_CALM or FOLD
+        if s.beat > 0 and (s.beat < least / EDGE or s.beat >= 2 * least * EDGE) then
+            s.beat = fold(s.beat)
+        end
+        if abs(2 * period - s.beat) < SAME * s.beat then
+            period = 2 * period
+        elseif abs(period / 2 - s.beat) < SAME * s.beat then
             period = period / 2
-        elseif period < FOLD / 2 and period * 2 <= LAG_MAX * TICK then
-            period = period * 2
         end
 
         if s.beat == 0 or abs(period - s.beat) < SAME * s.beat then
@@ -843,7 +902,7 @@ do
             local lock = max(-LOCK_MAX, min(LOCK_MAX, -LOCK * err)) * (1 - s.warp)
             target = target + ((1 + lock) / s.beat - target) * s.sure
         end
-        return target * (1 + WARP_GAIN * s.warp)
+        return target * (1 + WARP_GAIN * s.warp) * SPEED
     end
 
     -- fly moves the eye on by a tick and picks the way of the leg after each
@@ -915,6 +974,7 @@ do
             sum = sum + bands[i]
         end
         dive(sum / BANDS)
+        mood((bands[BANDS - 2] + bands[BANDS - 1] + bands[BANDS]) / 3, sum / BANDS)
 
         s.speed = s.speed + (target_speed() - s.speed) * K_SPEED
         fly()

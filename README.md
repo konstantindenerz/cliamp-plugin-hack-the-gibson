@@ -61,6 +61,8 @@ theme = "mechanoonna"
 theme_key = "ctrl+t"
 # Wait this long before the city reacts, when it is ahead of the sound.
 delay_ms = 0
+# The speed of the flight: 0.5 is half of it, 2 twice; 0.25 to 2.
+speed = 1
 ```
 
 A theme of your own is five colors, and two more if you like. Each of these keys replaces the color of the theme, so copy the block and change what you like:
@@ -84,7 +86,7 @@ The glass has a key of its own, `glass`: `"dots"` gives the grid of dots to towe
 
 ## Notes
 
-- The plugin reads the tempo from how the whole spectrum rises and falls, not from the kicks alone, so it also finds the beat of a break or of a track without drums. It takes half or twice a tempo outside of 85 to 170 BPM, so the eye flies at a like speed to any track.
+- The plugin reads the tempo from how the whole spectrum rises and falls, not from the kicks alone, so it also finds the beat of a break or of a track without drums. The bands do not tell a beat from half or twice of it, so the plugin takes the one between 85 and 170 BPM. In calm music it takes the one between 55 and 110 BPM, so lo-fi flies slowly; calm is music with next to nothing above 6 kHz, as lo-fi is. `speed` in the config makes the flight slower or faster for all music.
 - Kick, snare and hi-hat come from 10 bands, 20 times a second. That does not tell everything apart: the body of a snare sounds like a kick, so a snare sends a pulse along the ground too, and a track without a snare gets a frame of light now and then from whatever else rises in the mids.
 - The drums need a cliamp that gives plugins the sound as it plays ([bjarneo/cliamp#738](https://github.com/bjarneo/cliamp/pull/738)). Up to v2.4.1 a plugin gets the audio in bursts and ahead of the sound. With synthetic drum tracks the plugin then finds 56 to 83% of the kicks, about 150 ms before they sound; with the change it finds 95 to 100%, 40 ms after. `delay_ms = 175` lines up the kicks that an older cliamp does catch. The tempo holds either way.
 - The terminal font needs the Braille block (U+2800 to U+28FF).

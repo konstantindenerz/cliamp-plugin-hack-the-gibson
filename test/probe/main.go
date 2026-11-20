@@ -39,6 +39,7 @@ var (
 	pcmDir  = flag.String("pcm", "", "run the *.f32 files of this directory instead of the synthetic tracks")
 	tap     = flag.String("tap", "audible", "the tap of cliamp: audible (cliamp#738) or latest (before it)")
 	verbose = flag.Bool("v", false, "show the rise of each band at the hits")
+	trace   = flag.Bool("trace", false, "with -pcm: show the beat and the speed every 10 s of a track")
 )
 
 // peek lets the probe read the state that the plugin keeps to itself.
@@ -182,8 +183,9 @@ type hit struct {
 }
 
 // build mixes a track of secs seconds from patterns of one bar of 4 beats.
-// sub makes the kick an 808: a kick that is the bass too.
-func build(file, name string, bpm, secs float64, kicks, snares, hats []hit, bass, pad float64, sub bool) track {
+// sub makes the kick an 808: a kick that is the bass too. muffled takes the
+// top off the mix, as lo-fi does.
+func build(file, name string, bpm, secs float64, kicks, snares, hats []hit, bass, pad float64, sub, muffled bool) track {
 	rng := rand.New(rand.NewSource(1))
 	n := int(secs * sr)
 	pcm := make([]float64, n)
@@ -257,6 +259,16 @@ func build(file, name string, bpm, secs float64, kicks, snares, hats []hit, bass
 			})
 		}
 	}
+	if muffled {
+		// Two low-pass filters at 4 kHz in a row, and the hiss of a tape.
+		k := 1 - math.Exp(-2*math.Pi*4000/sr)
+		a, b := 0.0, 0.0
+		for i := range pcm {
+			a += (pcm[i] + 0.02*(rng.Float64()*2-1) - a) * k
+			b += (a - b) * k
+			pcm[i] = b
+		}
+	}
 	for i := range pcm {
 		pcm[i] = math.Tanh(0.8 * pcm[i]) // the limiter of a master
 	}
@@ -275,15 +287,19 @@ func tracks(secs float64) []track {
 		all16 = append(all16, hit{float64(i) / 4, 0.5 + 0.5*float64((i+1)%2)})
 	}
 	return []track{
-		build("house", "house: 4 kicks, clap 2+4, offbeat hats", 128, secs, four, backbeat, off8, 0.25, 0.03, false),
-		build("techno", "techno: 4 kicks, 16th hats, no snare", 138, secs, four, nil, all16, 0.3, 0.02, false),
-		build("rock", "rock: kick 1+3, snare 2+4, 8th hats", 100, secs, []hit{{0, 1}, {2, 1}, {2.5, 0.8}}, backbeat, all8, 0.25, 0.04, false),
-		build("dnb", "dnb: break, 16th hats", 174, secs, []hit{{0, 1}, {2.5, 1}}, backbeat, all16, 0.3, 0.03, false),
-		build("trap", "trap: 808 kicks, snare 3, hat rolls", 140, secs, []hit{{0, 1}, {1.5, 0.9}, {2.75, 0.9}}, []hit{{2, 1}}, all16, 0, 0.03, true),
-		build("kick", "kick only", 120, secs, four, nil, nil, 0, 0, false),
-		build("snare", "snare only", 120, secs, nil, backbeat, nil, 0, 0, false),
-		build("hats", "hats only", 120, secs, nil, nil, all8, 0, 0, false),
-		build("nodrums", "no drums: bass and pad", 120, secs, nil, nil, nil, 0.3, 0.05, false),
+		build("house", "house: 4 kicks, clap 2+4, offbeat hats", 128, secs, four, backbeat, off8, 0.25, 0.03, false, false),
+		build("techno", "techno: 4 kicks, 16th hats, no snare", 138, secs, four, nil, all16, 0.3, 0.02, false, false),
+		build("rock", "rock: kick 1+3, snare 2+4, 8th hats", 100, secs, []hit{{0, 1}, {2, 1}, {2.5, 0.8}}, backbeat, all8, 0.25, 0.04, false, false),
+		build("dnb", "dnb: break, 16th hats", 174, secs, []hit{{0, 1}, {2.5, 1}}, backbeat, all16, 0.3, 0.03, false, false),
+		build("trap", "trap: 808 kicks, snare 3, hat rolls", 140, secs, []hit{{0, 1}, {1.5, 0.9}, {2.75, 0.9}}, []hit{{2, 1}}, all16, 0, 0.03, true, false),
+		build("kick", "kick only", 120, secs, four, nil, nil, 0, 0, false, false),
+		build("snare", "snare only", 120, secs, nil, backbeat, nil, 0, 0, false, false),
+		build("hats", "hats only", 120, secs, nil, nil, all8, 0, 0, false, false),
+		build("nodrums", "no drums: bass and pad", 120, secs, nil, nil, nil, 0.3, 0.05, false, false),
+		build("lofi", "lofi: muffled, soft drums, swung hats", 75, secs,
+			[]hit{{0, 0.8}, {2, 0.7}, {2.75, 0.4}}, []hit{{1, 0.6}, {3, 0.6}},
+			[]hit{{0, 0.5}, {0.62, 0.4}, {1, 0.5}, {1.62, 0.4}, {2, 0.5}, {2.62, 0.4}, {3, 0.5}, {3.62, 0.4}},
+			0.3, 0.06, false, true),
 	}
 }
 
@@ -372,8 +388,8 @@ func synthetic(path string) {
 	for _, t := range tracks(60) {
 		r := play(path, t.pcm)
 		half := len(r.beat) / 2
-		fmt.Printf("%-40s %3.0f BPM  beat %.3f s (true %.3f)  sure %.2f  on the beat %3.0f%% of the time\n",
-			t.name, t.bpm, median(r.beat[half:]), fold(60/t.bpm), mean(r.sure[half:]), onBeat(r, 60/t.bpm))
+		fmt.Printf("%-40s %3.0f BPM  beat %.3f s (true %.3f)  sure %.2f  on the beat %3.0f%% of the time  speed %.2f blocks/s\n",
+			t.name, t.bpm, median(r.beat[half:]), 60/t.bpm, mean(r.sure[half:]), onBeat(r, 60/t.bpm), mean(r.speed[half:]))
 		for _, row := range []struct {
 			name         string
 			truth, found []float64
@@ -539,6 +555,53 @@ func music(path, dir string) {
 		fmt.Printf("%-12s reference %.3f s (%3.0f BPM)  plugin %.3f s  sure %.2f  on the beat %3.0f%% of the time | per minute: kick %3.0f snare %3.0f hat %3.0f\n",
 			filepath.Base(file), ref, 60/ref, median(r.beat[half:]), mean(r.sure[half:]), onBeat(r, ref),
 			float64(len(r.kicks))/mins, float64(len(r.snares))/mins, float64(len(r.hats))/mins)
+		// How hard the track hits: the rise of the bands per second, their
+		// level, and the share of the top three bands in it.
+		rise, level, top := 0.0, 0.0, 0.0
+		for i, bands := range r.bands {
+			for b, v := range bands {
+				level += v
+				if b >= 7 {
+					top += v
+				}
+				if i > 0 {
+					rise += math.Max(0, v-r.bands[i-1][b])
+				}
+			}
+		}
+		secs := float64(len(r.bands)) * tick
+		fmt.Printf("             rises %.2f per s  level %.2f  top bands %.0f%% of it  speed %.2f blocks/s (mean of the second half)\n",
+			rise/secs, level/float64(10*len(r.bands)), 100*top/level*10/3, mean(r.speed[half:]))
+		// The share of the top bands as the plugin tracks it: slow averages
+		// of the top and of all bands, after the first 10 s.
+		var shares []float64
+		k := 1 - math.Exp(-0.15*tick)
+		slowTop, slowAll := 0.0, 0.0
+		for i, bands := range r.bands {
+			all, high := 0.0, 0.0
+			for b, v := range bands {
+				all += v / 10
+				if b >= 7 {
+					high += v / 3
+				}
+			}
+			if i == 0 {
+				slowTop, slowAll = high, all
+			}
+			slowTop, slowAll = slowTop+(high-slowTop)*k, slowAll+(all-slowAll)*k
+			if float64(i)*tick >= 10 && slowAll > 0.02 {
+				shares = append(shares, slowTop/slowAll)
+			}
+		}
+		sort.Float64s(shares)
+		fmt.Printf("             top share, slow: least %.3f  median %.3f  most %.3f\n", shares[0], shares[len(shares)/2], shares[len(shares)-1])
+		if *trace {
+			for from := 0; from < len(r.beat); from += 200 {
+				to := min(len(r.beat), from+200)
+				fmt.Printf("             %3.0f s  beat %.3f s  sure %.2f  speed %.2f blocks/s\n",
+					float64(from)*tick, median(r.beat[from:to]), mean(r.sure[from:to]), mean(r.speed[from:to]))
+			}
+		}
 	}
 }
 
