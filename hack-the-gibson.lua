@@ -33,7 +33,6 @@ local DX = { [0] = 0, 1, 0, -1 }
 local DZ = { [0] = 1, 0, -1, 0 }
 
 local PULSES = 6
-local WAVES = 3
 
 -- Cell tiers, low to high; a cell shows the highest one drawn into it.
 local GRID, T1, T4, LIT, BEAT, DROP, HOT = 1, 2, 5, 6, 7, 8, 9
@@ -402,14 +401,11 @@ local function reset()
         scanUp = false,
         -- The pulse of the beat, 0..1: it jumps up on a beat and fades at
         -- once; snap is the same for a snare. due is when the last beat that
-        -- the tempo foretold was, and waves are the rings that the beats send
-        -- over the ground.
+        -- the tempo foretold was.
         thump = 0,
         snap = 0,
         due = -huge,
         phase = 0,
-        waves = {},
-        waved = 0,
         struck = 0, -- hi-hats so far
         strikeAt = -huge,
         strike = 0,
@@ -435,9 +431,6 @@ local function reset()
     }
     for _, o in ipairs(s.onsets) do
         o.mean, o.dev, o.since, o.over = 0.03, 0.02, o.gap, 0
-    end
-    for i = 1, WAVES do
-        s.waves[i] = { x = 0, z = 0, at = -huge, strength = 0 } -- strength 0 = unused
     end
     for i = 1, PULSES do
         s.pulses[i] = { x = 0, z = 0, dx = 0, dz = 0, at = -huge, strength = 0 } -- strength 0 = unused
@@ -543,10 +536,9 @@ do
     local HOVER = 2.2 -- s above the roofs
 
     -- The pulse: a beat that the tempo foretells comes LEAD seconds early and
-    -- is this strong when the tempo is sure; two rings are WAVE_GAP s apart.
+    -- is this strong when the tempo is sure.
     local LEAD = 0.05
     local BEAT_THUMP = 0.7
-    local WAVE_GAP = 0.15
 
     -- A hit as strong as the recent ones gets this strength.
     local HIT_TYPICAL = 0.6
@@ -812,16 +804,9 @@ do
         s.beatAt = s.clock - ago * TICK
     end
 
-    -- thud is a beat: the pulse jumps up, and a ring starts under the eye.
+    -- thud is a beat: the pulse jumps up.
     local function thud(strength)
         s.thump = max(s.thump, strength)
-        local last = s.waves[(s.waved - 1) % WAVES + 1]
-        if s.clock - last.at > WAVE_GAP then
-            local ring = s.waves[s.waved % WAVES + 1]
-            local x, _, z = camera()
-            ring.x, ring.z, ring.at, ring.strength = x, z, s.clock, strength
-            s.waved = s.waved + 1
-        end
     end
 
     -- foretell sets the pulse off on the beats of the tempo, a little before
@@ -1112,13 +1097,11 @@ do
 
     -- The pulse of the beat: the picture is this much nearer, the towers
     -- this much taller, the glass this much denser, and the edges this many
-    -- shades brighter. A ring on the ground grows at WAVE_SPEED for WAVE_LIFE
-    -- seconds; it is drawn with WAVE_SIDES sides.
+    -- shades brighter.
     local ZOOM = 0.06
     local JUMP = 0.1
     local GLASS_PUMP = 0.9
     local EDGE_PUMP = 1.2
-    local WAVE_SPEED, WAVE_LIFE, WAVE_SIDES = 13, 0.7, 48
 
     local STEP = BLOCK / 4 -- between two lines of the ground
     local SCAN_TIME = 0.45
@@ -1475,27 +1458,6 @@ do
             local far = k % 2 == 0 and reach or 0.5 * reach
             if abs(z) < far then
                 line(-far, y, z, far, y, z, GRID)
-            end
-        end
-
-        -- The rings of the beats: each grows from where the eye was on the
-        -- beat, hot at first and fainter as it grows.
-        y = y + 0.01
-        for _, wave in ipairs(s.waves) do
-            local age = clock - wave.at
-            if wave.strength * PULSE > 0 and age >= 0 and age <= WAVE_LIFE then
-                local r = WAVE_SPEED * age
-                local tier = age < WAVE_LIFE / 3 and HOT or age < 2 * WAVE_LIFE / 3 and LIT or T4
-                local cx, cz = wave.x - ex, wave.z - ez
-                local x0, z0 = cx + r, cz
-                for i = 1, WAVE_SIDES do
-                    local angle = 2 * pi * i / WAVE_SIDES
-                    local x1, z1 = cx + r * cos(angle), cz + r * sin(angle)
-                    if abs(x0) < reach and abs(z0) < reach then
-                        line(x0, y, z0, x1, y, z1, tier)
-                    end
-                    x0, z0 = x1, z1
-                end
             end
         end
     end
