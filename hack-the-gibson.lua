@@ -817,9 +817,9 @@ do
         s.thump = max(s.thump, strength)
         local last = s.waves[(s.waved - 1) % WAVES + 1]
         if s.clock - last.at > WAVE_GAP then
-            local wave = s.waves[s.waved % WAVES + 1]
+            local ring = s.waves[s.waved % WAVES + 1]
             local x, _, z = camera()
-            wave.x, wave.z, wave.at, wave.strength = x, z, s.clock, strength
+            ring.x, ring.z, ring.at, ring.strength = x, z, s.clock, strength
             s.waved = s.waved + 1
         end
     end
@@ -1489,8 +1489,8 @@ do
                 local cx, cz = wave.x - ex, wave.z - ez
                 local x0, z0 = cx + r, cz
                 for i = 1, WAVE_SIDES do
-                    local turn = 2 * pi * i / WAVE_SIDES
-                    local x1, z1 = cx + r * cos(turn), cz + r * sin(turn)
+                    local angle = 2 * pi * i / WAVE_SIDES
+                    local x1, z1 = cx + r * cos(angle), cz + r * sin(angle)
                     if abs(x0) < reach and abs(z0) < reach then
                         line(x0, y, z0, x1, y, z1, tier)
                     end
