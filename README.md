@@ -1,9 +1,6 @@
 # cliamp-plugin-hack-the-gibson
 
-
 https://github.com/user-attachments/assets/e8818aa9-448f-46e8-b510-f18d3923c872
-
-
 
 A music visualizer plugin for [cliamp](https://github.com/bjarneo/cliamp): a flight through a city of glass towers, like the Gibson in Hackers (1995). Edges and code are drawn with Braille dots, the glass is a background tint behind them. All colors are configurable.
 
@@ -37,14 +34,14 @@ Terminal colors have no shades, and the towers need them: far ones fade out and 
 
 `Ctrl+T` switches to the next theme. The status bar shows its name and the choice is remembered. The key also shows up in the `Ctrl+K` list.
 
-| Theme | |
-|---|---|
-| `hackers` | ![hackers](assets/themes/hackers.png) |
+| Theme         |                                               |
+| ------------- | --------------------------------------------- |
+| `hackers`     | ![hackers](assets/themes/hackers.png)         |
 | `mechanoonna` | ![mechanoonna](assets/themes/mechanoonna.png) |
 | `tokyo-night` | ![tokyo-night](assets/themes/tokyo-night.png) |
-| `catppuccin` | ![catppuccin](assets/themes/catppuccin.png) |
-| `gruvbox` | ![gruvbox](assets/themes/gruvbox.png) |
-| `kode` | ![kode](assets/themes/kode.png) |
+| `catppuccin`  | ![catppuccin](assets/themes/catppuccin.png)   |
+| `gruvbox`     | ![gruvbox](assets/themes/gruvbox.png)         |
+| `kode`        | ![kode](assets/themes/kode.png)               |
 
 `hackers` is the default. It is modeled on the Gibson from the film, which was a physical model: perspex blocks with text on cels, shot with a motion control camera at Pinewood. Pale cyan text on teal glass, blue-violet traces on the ground, violet bars, white pulses, and the towers turn red when the virus hits (that's the drop here). The colors are sampled from film stills, so they are close but not exact.
 
