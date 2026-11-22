@@ -913,6 +913,10 @@ func TestConfig(t *testing.T) {
 			checkFrame(t, out, 7, 76)
 		})
 	}
+	// The # of a hex color may be left out.
+	if frame(t, map[string]string{"floor": "102030"}) != frame(t, map[string]string{"floor": "#102030"}) {
+		t.Error(`floor = "102030" is not the color #102030`)
+	}
 }
 
 // themes mirrors THEMES in the plugin, in the order the theme key cycles

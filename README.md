@@ -92,7 +92,7 @@ glass = "#50c3bc" # the glass
 
 Set `back` to your terminal background. Far towers fade into it, and the glass is a background color somewhere between it and the tower color. If it doesn't match, the far towers and the thin glass stand out as dark or bright cells. The shades need a terminal with 24-bit color.
 
-A color can also be a palette index (0-255) instead of `#rrggbb`. That's what the `terminal` theme uses. Such a color follows your terminal theme, but it can't be shaded: towers are faint in the distance and switch to the bright variant up close (14 for 6), and their glass is a dot pattern.
+The `#` of a color may be left out. A color can also be a palette index (0-255) instead of `#rrggbb`. That's what the `terminal` theme uses. Such a color follows your terminal theme, but it can't be shaded: towers are faint in the distance and switch to the bright variant up close (14 for 6), and their glass is a dot pattern.
 
 `glass` takes a few more values: `"dots"` forces the dot pattern for any tower color, `"off"` turns the glass off, `"#rrggbb"` gives the glass a different color than the towers, and a palette index gives one flat background color.
 

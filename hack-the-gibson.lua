@@ -164,9 +164,12 @@ do
 		-- back to the theme. Returns {r, g, b} or {index = n}, or nil for an
 		-- optional color that isn't set anywhere.
 		local function read_color(key)
-			local value = p:config(key) or ""
-			local hex = value:match("^%s*#(%x%x%x%x%x%x)")
-			local index = not hex and tonumber(value:match("^%s*(%d+)") or "")
+			-- Six hex digits are a color, with or without #. A number on its
+			-- own is a palette index. The space ends a value that has nothing
+			-- after it.
+			local value = (p:config(key) or "") .. " "
+			local hex = value:match("^%s*#?(%x%x%x%x%x%x)%X")
+			local index = not hex and tonumber(value:match("^%s*(%d+)%X") or "")
 			if not hex and not index then
 				if type(def[key]) == "number" then
 					index = def[key]
