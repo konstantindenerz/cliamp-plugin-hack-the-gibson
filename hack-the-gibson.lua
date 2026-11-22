@@ -312,9 +312,10 @@ do
 		end
 	end
 
-	-- cliamp plugins call "Hack the Gibson" theme [name]
+	-- cliamp plugins call "Hack the Gibson" theme [name]. The shell splits
+	-- "Tokyo Night" into two arguments.
 	p:command("theme", function(args)
-		local name = find_theme(args[1])
+		local name = find_theme(table.concat(args, " "))
 		if name then
 			set_theme(name)
 			return THEMES[name].title

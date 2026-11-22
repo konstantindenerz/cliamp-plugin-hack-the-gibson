@@ -1126,7 +1126,8 @@ func TestThemeCommand(t *testing.T) {
 	h, want := load(t, nil), load(t, map[string]string{"theme": "tokyo-night"})
 	warmUp(h)
 	warmUp(want)
-	if out := h.call("theme", "Tokyo Night"); out != "Tokyo Night" {
+	// The shell hands over the words of the name one by one.
+	if out := h.call("theme", "Tokyo", "Night"); out != "Tokyo Night" {
 		t.Errorf("the command returned %q", out)
 	}
 	if nextFrame(h) != nextFrame(want) {
