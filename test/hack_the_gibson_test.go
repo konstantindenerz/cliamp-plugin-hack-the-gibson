@@ -1062,9 +1062,20 @@ func TestThemeKey(t *testing.T) {
 		t.Error("a press does not show while stopped")
 	}
 
+	// Other visualizers bind the same key. While the Gibson isn't on
+	// screen, a press leaves its theme alone.
+	h = load(t, nil)
+	h.tick(music(128, 0, 1), 7, 76, tick)
+	h.clock += 5
+	h.press("ctrl+t")
+	if len(h.said) > 0 {
+		t.Errorf("a press switched the theme while the Gibson was not on screen: %q", h.said)
+	}
+
 	// The pick survives a restart.
 	store := map[string]lua.LValue{}
 	h = start(t, nil, store, nil)
+	h.tick(music(128, 0, 1), 7, 76, tick)
 	h.press("ctrl+t")
 	h.press("ctrl+t")
 	twoOn := after(load(t, map[string]string{"theme": names[2]}), 0)
@@ -1077,6 +1088,7 @@ func TestThemeKey(t *testing.T) {
 		t.Error("the picked theme hides a later config change")
 	}
 	h = start(t, gruvbox, store, nil)
+	h.tick(music(128, 0, 1), 7, 76, tick)
 	h.press("ctrl+t")
 	kode := after(load(t, map[string]string{"theme": "kode"}), 0) // the one after gruvbox
 	if after(start(t, gruvbox, store, nil), 0) != kode {
@@ -1085,7 +1097,9 @@ func TestThemeKey(t *testing.T) {
 	// A pick that lost against the config stays gone, also when the config
 	// goes back to the theme it had when the pick was made.
 	store = map[string]lua.LValue{}
-	start(t, gruvbox, store, nil).press("ctrl+t")
+	h = start(t, gruvbox, store, nil)
+	h.tick(music(128, 0, 1), 7, 76, tick)
+	h.press("ctrl+t")
 	start(t, map[string]string{"theme": "catppuccin"}, store, nil)
 	if after(start(t, gruvbox, store, nil), 0) != after(load(t, gruvbox), 0) {
 		t.Error("an old pick came back when the config was set back")

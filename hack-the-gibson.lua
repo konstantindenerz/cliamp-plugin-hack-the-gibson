@@ -269,6 +269,10 @@ end
 -- config still names the same theme, so whichever changed last counts.
 local theme, theme_changed = "hackers", false
 
+-- Time of the last render. Other visualizers bind the same key, so it only
+-- counts while the Gibson is on screen.
+local shown_at = -huge
+
 do
 	local cfg_theme = p:config("theme") or ""
 	local saved = cliamp.store.get("theme")
@@ -301,6 +305,10 @@ do
 	local key = (p:config("theme_key") or "ctrl+t"):lower():match("^%s*([%w+_%-]*)")
 	if key ~= "" and key ~= "off" then
 		local ok, err = p:bind(key, "Next theme", function()
+			-- A paused or stopped player renders every 1.5 s.
+			if os.clock() - shown_at > 3 then
+				return
+			end
 			for i, name in ipairs(THEME_ORDER) do
 				if name == theme then
 					return set_theme(THEME_ORDER[i % #THEME_ORDER + 1])
@@ -1654,6 +1662,7 @@ function p:render(bands, frame, rows, cols)
 	end
 
 	local now = os.clock() -- wall time in cliamp's Lua VM
+	shown_at = now
 	local state = cliamp.player.state()
 	local moving = s.speed ~= 0
 	if state == "stopped" then

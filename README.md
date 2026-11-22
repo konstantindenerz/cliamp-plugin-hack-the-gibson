@@ -32,7 +32,7 @@ cliamp plugins remove hack-the-gibson
 
 Terminal colors have no shades, and the towers need them: far ones fade out and the glass is a tint. So the plugin brings its own themes.
 
-`Ctrl+T` switches to the next theme. The status bar shows its name and the choice is remembered. The key also shows up in the `Ctrl+K` list.
+`Ctrl+T` switches to the next theme. The status bar shows its name and the choice is remembered. The key also shows up in the `Ctrl+K` list. It only works while the Gibson is on screen, so other visualizers can use the same key.
 
 | Theme         |                                               |
 | ------------- | --------------------------------------------- |
