@@ -264,6 +264,15 @@ func (h *host) restart(rows, cols int) {
 	}
 }
 
+// leave calls destroy, as cliamp does when it switches to another visualizer.
+func (h *host) leave() {
+	h.t.Helper()
+	call := lua.P{Fn: h.plugin.RawGetString("destroy"), Protect: true}
+	if err := h.L.CallByParam(call, h.plugin); err != nil {
+		h.t.Fatalf("destroy: %v", err)
+	}
+}
+
 // numbers calls a Lua global that returns n numbers.
 func (h *host) numbers(name string, n int) []float64 {
 	h.t.Helper()
@@ -358,7 +367,7 @@ func TestRegisters(t *testing.T) {
 	if !slices.Equal(permissions, []string{"keymap"}) {
 		t.Errorf("permissions = %v, want only keymap", permissions)
 	}
-	for _, name := range []string{"render", "init"} {
+	for _, name := range []string{"render", "init", "destroy"} {
 		if _, ok := h.plugin.RawGetString(name).(*lua.LFunction); !ok {
 			t.Errorf("plugin has no %s function", name)
 		}
@@ -1070,6 +1079,21 @@ func TestThemeKey(t *testing.T) {
 	h.press("ctrl+t")
 	if len(h.said) > 0 {
 		t.Errorf("a press switched the theme while the Gibson was not on screen: %q", h.said)
+	}
+	// Right after switching to another visualizer, too.
+	h = load(t, nil)
+	h.tick(music(128, 0, 1), 7, 76, tick)
+	h.leave()
+	h.press("ctrl+t")
+	if len(h.said) > 0 {
+		t.Errorf("a press right after leaving the Gibson switched its theme: %q", h.said)
+	}
+	// Back on screen, the key works again.
+	h.restart(7, 76)
+	h.tick(music(128, 0, 1), 7, 76, tick)
+	h.press("ctrl+t")
+	if len(h.said) != 1 {
+		t.Errorf("after coming back, a press gave %q", h.said)
 	}
 
 	// The pick survives a restart.

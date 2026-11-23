@@ -270,7 +270,8 @@ end
 local theme, theme_changed = "hackers", false
 
 -- Time of the last render. Other visualizers bind the same key, so it only
--- counts while the Gibson is on screen.
+-- counts while the Gibson is on screen. destroy runs when cliamp switches
+-- to another visualizer and clears it.
 local shown_at = -huge
 
 do
@@ -1653,6 +1654,10 @@ local dirty, drawing, drawn_at, slow_draws = true, false, 0, 0
 function p:init()
 	reset()
 	last_at, last_frame, backlog, dirty = nil, nil, 0, true
+end
+
+function p:destroy()
+	shown_at = -huge
 end
 
 function p:render(bands, frame, rows, cols)
