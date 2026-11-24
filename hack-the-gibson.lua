@@ -6,7 +6,7 @@
 local p = plugin.register({
 	name = "Hack the Gibson",
 	type = "visualizer",
-	version = "0.1.1",
+	version = "0.2.0",
 	description = "Flight through a city of glass towers",
 	permissions = { "keymap" }, -- for the theme key
 })
