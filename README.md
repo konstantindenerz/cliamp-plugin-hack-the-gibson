@@ -69,8 +69,6 @@ Nothing is required. These are the optional keys with their defaults:
 theme = "hackers"
 # Key that switches the theme, "off" for none.
 theme_key = "ctrl+t"
-# Delay the reaction by this much if the city is ahead of the sound.
-delay_ms = 0
 # Flight speed: 0.5 is half, 2 is double. Range 0.25 to 2.
 speed = 1
 # How strongly the city pulses on the beat: 0 is off, 2 is double.
@@ -100,7 +98,7 @@ The `#` of a color may be left out. A color can also be a palette index (0-255) 
 
 - The tempo comes from how the whole spectrum rises and falls, not only from the kicks, so it also works for breakbeats and tracks without drums. The bands can't tell a beat from half or double of it, so the plugin picks the one between 85 and 170 BPM. For calm music (next to nothing above 6 kHz, like lo-fi) it picks the one between 55 and 110 BPM, so lo-fi flies slowly. `speed` scales the flight for all music.
 - Kick, snare and hi-hat are detected from 10 bands at 20 Hz. That's not enough to separate everything: the body of a snare looks like a kick, so a snare also sends a pulse down the street, and a track without a snare still gets a frame of light now and then from whatever else moves in the mids.
-- Drum detection needs a cliamp that hands plugins the audio as it plays ([bjarneo/cliamp#738](https://github.com/bjarneo/cliamp/pull/738)). Up to v2.4.1, plugins get the audio in bursts and ahead of the sound. With synthetic drum tracks the plugin then finds 56 to 83% of the kicks, about 150 ms early. With the change it finds 95 to 100%, 40 ms late. `delay_ms = 175` lines up the kicks an older cliamp does catch. The tempo works either way.
+- Drum detection needs a cliamp with [bjarneo/cliamp#738](https://github.com/bjarneo/cliamp/pull/738), which hands plugins the audio as it plays. Without it, plugins get the audio in bursts and ahead of the sound. With synthetic drum tracks the plugin then finds 56 to 83% of the kicks, about 150 ms early. With the change it finds 95 to 100%, 40 ms late. The tempo works either way.
 - Your terminal font needs the Braille block (U+2800 to U+28FF).
 - cliamp gives a plugin 50 ms per frame. A full-screen frame at 140x40 takes about a third of that on an Apple M-series CPU. If frames get slow, the plugin draws less of the distance to keep up.
 - A low panel only shows the nearby towers. It looks best in full screen.

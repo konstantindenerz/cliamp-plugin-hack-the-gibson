@@ -901,9 +901,9 @@ func TestConfig(t *testing.T) {
 		{"dotted glass", map[string]string{"glass": "dots"}, floor, ""},
 		{"flat glass", map[string]string{"glass": "8"}, floor, "\x1b[100m"},
 		{"glass color", map[string]string{"tower": "6", "glass": "#58C6A2"}, floor, "\x1b[48;2;"},
-		{"comment after the value", map[string]string{"floor": "244  # gray", "delay_ms": "100 # ms"}, "\x1b[22;2;38;5;244m", "\x1b[48;2;"},
-		{"junk", map[string]string{"floor": "abc", "tower": "#12", "beat": "-5", "hot": "", "back": "7", "delay_ms": "x", "glass": "on"}, floor, "\x1b[48;2;"},
-		{"too big", map[string]string{"floor": "70000", "delay_ms": "99999999999", "glass": "70000"}, "\x1b[22;2;38;5;255m", "\x1b[48;5;255m"},
+		{"comment after the value", map[string]string{"floor": "244  # gray", "pulse": "1 # normal"}, "\x1b[22;2;38;5;244m", "\x1b[48;2;"},
+		{"junk", map[string]string{"floor": "abc", "tower": "#12", "beat": "-5", "hot": "", "back": "7", "pulse": "x", "glass": "on"}, floor, "\x1b[48;2;"},
+		{"too big", map[string]string{"floor": "70000", "pulse": "99999999999", "glass": "70000"}, "\x1b[22;2;38;5;255m", "\x1b[48;5;255m"},
 		{"escape codes", map[string]string{"floor": "7\x1b]0;x\x07", "tower": "#ffffff\x1b[2J"}, "\x1b[22;2;37m", "\x1b[48;2;"},
 		{"no glass", map[string]string{"glass": "off"}, floor, ""},
 	} {
@@ -1246,24 +1246,6 @@ func TestGlassOfDots(t *testing.T) {
 	}
 	if dotted := cells(map[string]string{"glass": "dots"}); dotted < bare+100 {
 		t.Errorf("%d cells with dots with dotted glass, %d without glass", dotted, bare)
-	}
-}
-
-// delay_ms holds the bands back, so a kick shows that much later.
-func TestDelay(t *testing.T) {
-	firstKick := func(config map[string]string) float64 {
-		h := load(t, config)
-		for i := range 200 {
-			h.tick(music(128, float64(i)*tick, 1), 7, 76, tick)
-			if h.flight().lastKick > 0 {
-				return h.clock
-			}
-		}
-		t.Fatal("no kick")
-		return 0
-	}
-	if now, late := firstKick(nil), firstKick(map[string]string{"delay_ms": "200"}); math.Abs(late-now-0.2) > 1e-9 {
-		t.Fatalf("first kick at %.2f s, with delay_ms = 200 at %.2f s", now, late)
 	}
 }
 

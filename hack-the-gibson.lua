@@ -337,10 +337,6 @@ do
 	end)
 end
 
--- delay_ms holds the bands back, for a cliamp that hands plugins the audio
--- before it is heard. In ticks, one second at most.
-local DELAY = floor(conf_num("delay_ms", 0, 0, 1000) / (TICK * 1000) + 0.5)
-
 -- pulse scales how much of the beat shows: 0 is off, 2 is double.
 local PULSE = conf_num("pulse", 1, 0, 2)
 
@@ -459,9 +455,6 @@ local function reset()
 		prev = filled(BANDS, 0),
 		typical = { 0, 0, 0 }, -- usual hit strength per drum
 		pulses = {},
-		delay_ring = {}, -- the bands of the last DELAY ticks
-		delay_at = 0,
-		delayed = filled(BANDS, 0),
 		last_bands = filled(BANDS, 0), -- the bands of the previous frame
 		mid_bands = filled(BANDS, 0),
 
@@ -479,9 +472,6 @@ local function reset()
 	end
 	for i = 1, PULSES do
 		s.pulses[i] = { x = 0, z = 0, dx = 0, dz = 0, at = -huge, strength = 0 } -- strength 0 = unused
-	end
-	for i = 1, DELAY do
-		s.delay_ring[i] = filled(BANDS, 0)
 	end
 end
 
@@ -1000,19 +990,6 @@ do
 		end
 	end
 
-	-- Swaps the bands for those of DELAY ticks ago.
-	local function delay(bands)
-		if DELAY == 0 then
-			return bands
-		end
-		s.delay_at = s.delay_at % DELAY + 1
-		local slot, late = s.delay_ring[s.delay_at], s.delayed
-		for i = 1, BANDS do
-			late[i], slot[i] = slot[i], bands[i]
-		end
-		return late
-	end
-
 	-- cliamp smooths the bands and hands over their state at the end of a
 	-- frame, with a faster attack than release. These are its two rates.
 	local EASE_UP, EASE_DOWN = 34, 10
@@ -1031,7 +1008,6 @@ do
 
 	-- One tick of playback.
 	local function step(bands)
-		bands = delay(bands)
 		s.loud = s.loud + (track_levels(bands) - s.loud) * K_LOUD
 		s.clock = s.clock + TICK
 		if not s.playing then
